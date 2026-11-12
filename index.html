@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="h-full bg-slate-950 text-slate-100 antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAROT WasteOS™ | Enterprise Smart Waste & IoT Fleet Platform</title>
+    <link rel="icon" href="https://parotcorp.com/Images/Logo.png" type="image/png">
+
+    <!-- Google Fonts: Outfit & IBM Plex Sans Arabic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857'
+                        },
+                        parot: {
+                            purple: '#8B5CF6',
+                            pink: '#EC4899',
+                            blue: '#3B82F6',
+                            cyan: '#06B6D4',
+                            emerald: '#10B981',
+                            dark: '#0f172a',
+                            darker: '#020617'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        arabic: ['IBM Plex Sans Arabic', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome 6 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --primary-accent: #10B981;
+            --primary-gradient: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #020617;
+            overflow-x: hidden;
+        }
+        [dir="rtl"] {
+            font-family: 'IBM Plex Sans Arabic', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glow-pulse-red {
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        .glow-pulse-purple {
+            animation: pulse-purple 2s infinite;
+        }
+        @keyframes pulse-purple {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+        /* Leaflet popups */
+        .leaflet-popup-content-wrapper {
+            background: #0f172a !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6) !important;
+            padding: 2px !important;
+        }
+        .leaflet-popup-tip {
+            background: #0f172a !important;
+        }
+        /* Toast notification animations */
+        @keyframes slideInRight {
+            from { transform: translateX(110%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(110%); opacity: 0; }
+        }
+        .toast-enter {
+            animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .toast-exit {
+            animation: slideOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none w-80 md:w-96"></div>
+
+    <!-- TOP ANNOUNCEMENT / STATUS BAR -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-white/5 py-1 px-4 text-xs flex justify-between items-center text-slate-300">
+        <div class="flex items-center space-x-3 rtl:space-x-reverse">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium text-[11px]">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span data-i18n="system_status">Live Ingestion Engine Active</span>
+            </span>
+            <span class="hidden md:inline text-slate-600">|</span>
+            <span class="hidden md:flex items-center gap-1.5 text-slate-400 text-[11px]">
+                <i class="fa-solid fa-microchip text-parot-cyan"></i>
+                <span>Dingtek DF703 4G + MQTT Broker (EMQX) v5.0 Connected</span>
+            </span>
+        </div>
+        <div class="flex items-center space-x-3 rtl:space-x-reverse text-xs">
+            <span class="hidden sm:inline-flex items-center gap-1 text-slate-300 bg-white/5 px-2 py-0.5 rounded border border-white/10 text-[11px]">
+                <i class="fa-solid fa-briefcase text-parot-purple"></i>
+                <span data-i18n="meeting_mode">Enterprise Commercial Demo &bull; PAROT x NEXORA</span>
+            </span>
+            <!-- Quick Language Switcher -->
+            <button onclick="toggleLanguage()" class="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition text-xs border border-white/10 font-medium">
+                <i class="fa-solid fa-language text-emerald-400"></i>
+                <span id="langLabel">العربية</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN NAVBAR (COMPACT & FULLY RESPONSIVE) -->
+    <header class="glass-panel border-b border-white/10 sticky top-0 z-40 px-3 lg:px-5 py-2.5 flex items-center justify-between gap-2">
+        
+        <!-- Left: Brand Logo & Title -->
+        <div class="flex items-center space-x-2.5 rtl:space-x-reverse cursor-pointer flex-shrink-0" onclick="switchTab('dashboard')">
+            <div id="brandLogoContainer" class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 p-0.5 shadow-md shadow-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <img id="brandLogoImg" src="https://parotcorp.com/Images/Logo.png" alt="PAROT Logo" class="w-full h-full object-contain rounded-lg p-0.5">
+            </div>
+            <div class="leading-tight">
+                <div class="flex items-center gap-1.5">
+                    <span id="brandTitle" class="font-bold text-base tracking-tight text-white whitespace-nowrap">PAROT WasteOS™</span>
+                    <span id="brandBadge" class="text-[9px] font-semibold uppercase tracking-wider px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Enterprise</span>
+                </div>
+                <div id="brandSubtitle" class="text-[10px] text-slate-400 truncate max-w-[200px] md:max-w-none">By PAROT (parotcorp.com) &bull; Multi-Tenant Fleet</div>
+            </div>
+        </div>
+
+        <!-- Center: Tenant & Region Selector (Item 3) -->
+        <div class="hidden xl:flex items-center bg-slate-900/90 border border-white/10 rounded-lg p-0.5 text-xs">
+            <div class="flex items-center px-2 py-0.5 text-slate-400">
+                <i class="fa-solid fa-building-columns mr-1 text-parot-purple text-[10px]"></i>
+                <span data-i18n="tenant_label" class="text-[11px]">Tenant:</span>
+            </div>
+            <select id="tenantSelect" onchange="onTenantChange(this.value)" class="bg-slate-800 text-slate-200 font-medium rounded px-2 py-1 border-0 focus:ring-1 focus:ring-emerald-500 outline-none cursor-pointer text-xs">
+                <option value="nexora">NEXORA (Client Tier 1 &bull; KSA & Egypt)</option>
+                <option value="tmg">TMG - Talaat Moustafa Group (Madinaty)</option>
+                <option value="riyadh">Riyadh Municipality (Smart City KSA)</option>
+                <option value="parot_hq">PAROT Master Admin (All Tenants)</option>
+            </select>
+            <div class="flex items-center px-2 py-0.5 text-slate-400 border-l border-white/10 ml-1 rtl:border-r rtl:border-l-0 rtl:mr-1 rtl:ml-0">
+                <i class="fa-solid fa-location-dot mr-1 text-emerald-400 text-[10px]"></i>
+                <span data-i18n="region_label" class="text-[11px]">Region:</span>
+            </div>
+            <select id="regionSelect" onchange="onRegionChange(this.value)" class="bg-slate-800 text-slate-200 font-medium rounded px-2 py-1 border-0 focus:ring-1 focus:ring-emerald-500 outline-none cursor-pointer text-xs">
+                <option value="cairo">Cairo & New Capital (120 Bins)</option>
+                <option value="riyadh">Riyadh & KAFD (80 Bins)</option>
+                <option value="all">All Regional Sites (200 Bins)</option>
+            </select>
+        </div>
+
+        <!-- Center-Right: Navigation Tabs (Compact) -->
+        <nav class="flex items-center space-x-1 rtl:space-x-reverse text-xs font-medium overflow-x-auto">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn px-2.5 py-1.5 rounded-lg text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 transition flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-chart-line text-[11px]"></i>
+                <span data-i18n="nav_dashboard">Live Operations</span>
+            </button>
+            <button onclick="switchTab('routing')" id="nav-routing" class="nav-btn px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-route text-amber-400 text-[11px]"></i>
+                <span data-i18n="nav_routing">AI Routing</span>
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            </button>
+            <button onclick="switchTab('sensors')" id="nav-sensors" class="nav-btn px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-satellite-dish text-parot-cyan text-[11px]"></i>
+                <span data-i18n="nav_sensors">DF703 & MQTT</span>
+            </button>
+            <button onclick="switchTab('scale')" id="nav-scale" class="nav-btn px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-server text-parot-purple text-[11px]"></i>
+                <span data-i18n="nav_scale">10k Scale</span>
+            </button>
+            <button onclick="switchTab('commercial')" id="nav-commercial" class="nav-btn px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-file-contract text-emerald-400 text-[11px]"></i>
+                <span data-i18n="nav_commercial">Terms & SLA</span>
+            </button>
+        </nav>
+
+        <!-- Right Quick Actions: White-Label Studio & Driver View -->
+        <div class="flex items-center space-x-2 rtl:space-x-reverse flex-shrink-0">
+            <!-- White-Label Studio Button -->
+            <button onclick="openWhiteLabelModal()" class="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-parot-purple/20 to-pink-500/20 border border-parot-purple/30 text-parot-purple hover:from-parot-purple/30 hover:to-pink-500/30 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap">
+                <i class="fa-solid fa-palette text-[11px]"></i>
+                <span class="hidden sm:inline" data-i18n="whitelabel_btn">White-Label</span>
+            </button>
+
+            <!-- Driver Mobile Mode Simulation -->
+            <button onclick="openDriverModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap">
+                <i class="fa-solid fa-mobile-screen-button text-amber-400 text-[11px]"></i>
+                <span class="hidden sm:inline" data-i18n="driver_app_btn">Driver App</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN BODY CONTENT AREA -->
+    <main class="flex-1 flex flex-col overflow-hidden relative">
+
+        <!-- TAB 1: LIVE OPERATIONS & GIS MAP (DEFAULT) -->
+        <section id="tab-dashboard" class="tab-content flex-1 flex flex-col p-3 lg:p-5 overflow-y-auto space-y-4">
+            
+            <!-- TOP METRICS STATS CARDS -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider" data-i18n="metric_total_bins">Total Connected Bins</div>
+                    <div class="text-xl font-bold text-white mt-0.5 flex items-baseline gap-1.5">
+                        <span id="metricTotalBins">200</span>
+                        <span class="text-[11px] text-emerald-400 font-normal"><i class="fa-solid fa-check"></i> 100% active</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Dingtek DF703 4G + MQTT</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-white/5"><i class="fa-solid fa-trash-can"></i></div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-amber-400 uppercase tracking-wider" data-i18n="metric_full_bins">Full / Critical (>80%)</div>
+                    <div class="text-xl font-bold text-amber-400 mt-0.5 flex items-baseline gap-1.5">
+                        <span id="metricFullBins">28</span>
+                        <span class="text-[11px] text-amber-300 font-normal">Need Dispatch</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Ready for route grouping</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-amber-500/10"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-rose-400 uppercase tracking-wider" data-i18n="metric_active_alarms">Active Critical Alarms</div>
+                    <div class="text-xl font-bold text-rose-400 mt-0.5 flex items-baseline gap-1.5">
+                        <span id="metricActiveAlarms">3</span>
+                        <span class="text-[10px] bg-rose-500/20 text-rose-300 px-1 py-0.2 rounded font-mono">2 Fire &bull; 1 Tilt</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Real-time Dingtek telemetry</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-rose-500/10"><i class="fa-solid fa-fire"></i></div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider" data-i18n="metric_fleet_active">Active Fleet Trucks</div>
+                    <div class="text-xl font-bold text-cyan-400 mt-0.5 flex items-baseline gap-1.5">
+                        <span>6</span>
+                        <span class="text-[11px] text-slate-400 font-normal">of 8 Vehicles</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">GPS telemetry synced</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-cyan-500/10"><i class="fa-solid fa-truck"></i></div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider" data-i18n="metric_co2_saved">CO₂ Emission Saved</div>
+                    <div class="text-xl font-bold text-emerald-400 mt-0.5 flex items-baseline gap-1.5">
+                        <span>34.2%</span>
+                        <span class="text-[11px] text-emerald-300 font-normal">-142 kg today</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Via AI dynamic routing</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-emerald-500/10"><i class="fa-solid fa-leaf"></i></div>
+                </div>
+
+                <div class="glass-panel p-3 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider" data-i18n="metric_sla_score">SLA Compliance</div>
+                    <div class="text-xl font-bold text-indigo-400 mt-0.5 flex items-baseline gap-1.5">
+                        <span>99.4%</span>
+                        <span class="text-[11px] text-indigo-300 font-normal">&lt;25m response</span>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Contract target 95%</div>
+                    <div class="absolute -right-2 -bottom-2 text-3xl text-indigo-500/10"><i class="fa-solid fa-award"></i></div>
+                </div>
+            </div>
+
+            <!-- MAIN WORKSPACE: MAP (LEFT) + LIVE TELEMETRY FEED (RIGHT) -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-[550px]">
+                
+                <!-- GIS MAP CONTAINER (3 COLS) -->
+                <div class="lg:col-span-3 glass-panel rounded-2xl p-2.5 flex flex-col relative border border-white/10 shadow-2xl">
+                    
+                    <!-- Map Toolbar with Layer Switcher (No watermark, pristine Esri/Satellite tiles) -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-900/90 rounded-xl mb-2 text-xs border border-white/5">
+                        
+                        <!-- Left: Status Filters -->
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-semibold text-slate-300 flex items-center gap-1 text-[11px]">
+                                <i class="fa-solid fa-map-location-dot text-emerald-400"></i>
+                                <span data-i18n="live_map_title">Live Assets</span>
+                            </span>
+                            <div class="flex items-center gap-1 bg-slate-800/90 p-0.5 rounded-lg border border-white/10">
+                                <button onclick="filterMapMarkers('all', event)" class="map-filter-btn px-2 py-0.5 rounded bg-emerald-500 text-white font-medium text-[11px]">All (200)</button>
+                                <button onclick="filterMapMarkers('critical', event)" class="map-filter-btn px-2 py-0.5 rounded text-slate-300 hover:text-white text-[11px]">Full &gt;80% (28)</button>
+                                <button onclick="filterMapMarkers('alarm', event)" class="map-filter-btn px-2 py-0.5 rounded text-rose-300 hover:text-white text-[11px]">Alarms (3)</button>
+                            </div>
+                        </div>
+
+                        <!-- Center: Base Layer Style Switcher (Dark / Satellite / Street) -->
+                        <div class="flex items-center gap-1 bg-slate-800/90 p-0.5 rounded-lg border border-white/10 text-[11px]">
+                            <button onclick="setMapBaseLayer('dark', event)" class="map-layer-btn px-2 py-0.5 rounded bg-slate-700 text-white font-medium flex items-center gap-1">
+                                <i class="fa-solid fa-moon text-indigo-400"></i> <span>Dark</span>
+                            </button>
+                            <button onclick="setMapBaseLayer('satellite', event)" class="map-layer-btn px-2 py-0.5 rounded text-slate-400 hover:text-white flex items-center gap-1">
+                                <i class="fa-solid fa-satellite text-amber-400"></i> <span>Satellite</span>
+                            </button>
+                            <button onclick="setMapBaseLayer('streets', event)" class="map-layer-btn px-2 py-0.5 rounded text-slate-400 hover:text-white flex items-center gap-1">
+                                <i class="fa-solid fa-road text-emerald-400"></i> <span>Streets</span>
+                            </button>
+                        </div>
+
+                        <!-- Right: City Fly-To + Emergency Simulation -->
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="flyToCity('cairo')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1 text-[11px]">
+                                <span>🇪🇬 Cairo & New Capital</span>
+                            </button>
+                            <button onclick="flyToCity('riyadh')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1 text-[11px]">
+                                <span>🇸🇦 Riyadh Smart City</span>
+                            </button>
+                            <button onclick="triggerSimulatedEmergency()" class="px-2.5 py-1 rounded bg-rose-600/30 text-rose-300 hover:bg-rose-600/50 border border-rose-500/40 font-semibold flex items-center gap-1 transition text-[11px]">
+                                <i class="fa-solid fa-fire text-rose-400 animate-pulse"></i>
+                                <span data-i18n="simulate_alarm_btn">Simulate Alarm</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- LEAFLET MAP ELEMENT -->
+                    <div id="leafletMap" class="flex-1 w-full rounded-xl z-10 min-h-[480px]"></div>
+
+                    <!-- Map Legend overlay -->
+                    <div class="absolute bottom-6 left-6 z-20 glass-panel p-2.5 rounded-xl border border-white/10 text-[10px] space-y-1 shadow-xl">
+                        <div class="font-semibold text-slate-300 mb-0.5" data-i18n="legend_title">Bin Fill Status</div>
+                        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> <span>Normal (&lt;50%)</span></div>
+                        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> <span>Medium (50% - 79%)</span></div>
+                        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 glow-pulse-red"></span> <span>Critical / Full (&ge;80%)</span></div>
+                        <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-purple-500 glow-pulse-purple"></span> <span>Fire / Overheat / Tilt Alarm</span></div>
+                    </div>
+                </div>
+
+                <!-- RIGHT SIDEBAR: REAL-TIME TELEMETRY STREAM & CRITICAL QUEUE (1 COL) -->
+                <div class="lg:col-span-1 flex flex-col space-y-3">
+                    
+                    <!-- CRITICAL ATTENTION QUEUE -->
+                    <div class="glass-panel rounded-2xl p-3.5 border border-rose-500/20 bg-rose-950/10 flex flex-col">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-bell glow-pulse-red text-rose-400 p-1 bg-rose-500/20 rounded text-[10px]"></i>
+                                <span data-i18n="critical_queue_title">Critical Bins & Alarms</span>
+                            </span>
+                            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 font-mono font-bold">LIVE</span>
+                        </div>
+
+                        <div id="criticalQueueList" class="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- LIVE TELEMETRY TICKER (Dingtek DF703 Hex & MQTT Packets) -->
+                    <div class="glass-panel rounded-2xl p-3.5 border border-white/10 flex-1 flex flex-col min-h-[270px]">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fa-solid fa-tower-broadcast text-emerald-400 text-[11px]"></i>
+                                <span data-i18n="telemetry_stream_title">Live Protocol Feed</span>
+                            </span>
+                            <span class="text-[10px] text-slate-500 font-mono" id="feedCounter">32 pkts/sec</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mb-2">Decoded frames from Dingtek DF703 4G TCP sockets & MQTT:</p>
+
+                        <div id="liveTelemetryLog" class="flex-1 font-mono text-[10px] space-y-1.5 overflow-y-auto max-h-[250px] bg-slate-950/90 p-2 rounded-xl border border-white/5 text-slate-300">
+                            <!-- Populated by simulation loop -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: AI ROUTE OPTIMIZER & DISPATCH -->
+        <section id="tab-routing" class="tab-content hidden flex-1 flex flex-col p-3 lg:p-5 overflow-y-auto space-y-4">
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-route text-amber-400"></i>
+                        <span data-i18n="route_optimizer_title">AI Smart Route Optimizer & Fleet Dispatch</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5 max-w-2xl">
+                        Proprietary Ant-Colony & TSP Algorithm. Detects bins &gt;80% capacity, calculates energy-efficient collection paths, and syncs turn-by-turn navigation to driver tablets.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="generateOptimizedRoute()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition transform active:scale-95">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                        <span data-i18n="calc_route_btn">Generate Optimal Route (8 Bins)</span>
+                    </button>
+                    <button onclick="dispatchRouteToDrivers()" id="dispatchBtn" disabled class="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-500 cursor-not-allowed text-xs font-bold flex items-center gap-1.5 border border-white/10 transition">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span data-i18n="dispatch_btn">Dispatch to Driver App</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ROUTE VISUALIZATION & DRIVER ASSIGNMENT -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
+                <!-- ROUTE STEPS & STOPS -->
+                <div class="lg:col-span-1 glass-panel p-4 rounded-2xl border border-white/10 flex flex-col space-y-3">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                        <div>
+                            <div class="text-sm font-bold text-white" id="routeSummaryTitle">Route #CR-104 (New Cairo & Madinaty)</div>
+                            <div class="text-xs text-slate-400">Vehicle: <span class="text-cyan-400 font-semibold">Truck #101 (Actros 18t)</span> &bull; Ahmed Mostafa</div>
+                        </div>
+                        <span id="routeBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/10">Draft</span>
+                    </div>
+
+                    <!-- ROUTE METRICS HIGHLIGHTS -->
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-white/5">
+                            <div class="text-[9px] text-slate-400 uppercase">Stops</div>
+                            <div class="text-sm font-bold text-white mt-0.5" id="routeTotalStops">8 Bins</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-white/5">
+                            <div class="text-[9px] text-slate-400 uppercase">Distance</div>
+                            <div class="text-sm font-bold text-emerald-400 mt-0.5" id="routeTotalKm">14.2 km</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-xl border border-white/5">
+                            <div class="text-[9px] text-slate-400 uppercase">Est. Time</div>
+                            <div class="text-sm font-bold text-indigo-400 mt-0.5" id="routeTotalMins">38 mins</div>
+                        </div>
+                    </div>
+
+                    <!-- ORDERED STOPS LIST -->
+                    <div class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                        <span>Optimized Stop Sequence</span>
+                        <span class="text-[10px] text-emerald-400 font-normal"><i class="fa-solid fa-arrows-split-up-and-left"></i> Shortest path</span>
+                    </div>
+
+                    <div id="routeStopsList" class="flex-1 space-y-2 overflow-y-auto max-h-[380px] pr-1">
+                        <div class="text-center py-10 text-slate-500 text-xs">
+                            <i class="fa-solid fa-route text-3xl mb-2 text-slate-600"></i><br>
+                            Click "Generate Optimal Route" above to compute the real-time collection path for full bins.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ROUTE MAP VISUALIZER (2 COLS) -->
+                <div class="lg:col-span-2 glass-panel p-2.5 rounded-2xl border border-white/10 flex flex-col relative">
+                    <div id="routingLeafletMap" class="flex-1 w-full rounded-xl min-h-[460px]"></div>
+                    <div id="routeOptimizationBanner" class="hidden absolute top-6 right-6 z-20 glass-panel p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/90 text-xs space-y-1 shadow-2xl">
+                        <div class="font-bold text-emerald-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                            <span>Path Optimized via Ant-Colony AI</span>
+                        </div>
+                        <div class="text-slate-300 text-[11px]">&bull; Fuel Savings: <strong>28.4%</strong> vs static route</div>
+                        <div class="text-slate-300 text-[11px]">&bull; Driver: <strong>Ahmed Mostafa</strong> (Mobile Notified)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: SENSOR PROTOCOLS & DINGTEK DF703 DECODER (ITEM 1) -->
+        <section id="tab-sensors" class="tab-content hidden flex-1 flex flex-col p-3 lg:p-5 overflow-y-auto space-y-4">
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-satellite-dish text-parot-cyan"></i>
+                        <span>Sensor Hardware & Multi-Protocol Gateway Engine</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5 max-w-2xl">
+                        Full compatibility with <strong>Dingtek DF703 (4G / NB-IoT TCP Protocol V2.8)</strong> and open <strong>MQTT v5.0</strong> integration. Decoupled driver architecture allows plugging in Sensoneo, Milesight, or proprietary hardware with zero backend changes.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="injectSimulatedPacket()" class="px-3 py-1.5 rounded-lg bg-parot-cyan/20 border border-parot-cyan/40 text-parot-cyan hover:bg-parot-cyan/30 text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Inject Sample DF703 Uplink</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PROTOCOL PARSER WALKTHROUGH -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- DINGTEK DF703 RAW TCP DECODER -->
+                <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col space-y-3">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">TCP</span>
+                            <div>
+                                <div class="text-sm font-bold text-white">Dingtek DF703 4G Uplink Decoder</div>
+                                <div class="text-[10px] text-slate-400">Specification: DF703_4G_TCP_Protocol V2.8</div>
+                            </div>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">PORT 12345</span>
+                    </div>
+
+                    <!-- Raw Hex Stream Display -->
+                    <div>
+                        <div class="text-xs font-semibold text-slate-300 mb-1 flex justify-between">
+                            <span>Incoming Raw Hex Packet (ASCII TCP Socket)</span>
+                            <span class="text-emerald-400 text-[10px] font-mono">CRC Valid &bull; Length: 34 Bytes</span>
+                        </div>
+                        <div class="p-2.5 bg-slate-950 rounded-xl border border-white/10 font-mono text-xs text-amber-300 break-all leading-relaxed select-all">
+                            80 00 01 01 22 <span class="text-emerald-400 font-bold">00 F8</span> 00 <span class="text-cyan-400 font-bold">17</span> 01 <span class="text-pink-400 font-bold">66</span> <span class="text-rose-400 font-bold">01 11</span> <span class="text-purple-400 font-bold">01 66</span> 00 80 22 C4 00 0A 5F 71 B6 A9 <span class="text-blue-400 font-bold">18 60 76 10 79 93 37 23</span> 81
+                        </div>
+                    </div>
+
+                    <!-- Byte Breakdown Table -->
+                    <div class="border border-white/10 rounded-xl overflow-hidden text-xs">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-900/80 text-slate-400 text-[9px] uppercase">
+                                <tr>
+                                    <th class="py-1.5 px-3">Byte Field</th>
+                                    <th class="py-1.5 px-3">Hex Value</th>
+                                    <th class="py-1.5 px-3">Parsed Metric</th>
+                                    <th class="py-1.5 px-3">Interpretation</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5 text-slate-300 font-mono text-[10px]">
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Head / Tail</td>
+                                    <td class="py-1.5 px-3">0x80 / 0x81</td>
+                                    <td class="py-1.5 px-3 text-emerald-400">Valid Frame</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">Standard Dingtek framing</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Ultrasonic Dist</td>
+                                    <td class="py-1.5 px-3 text-emerald-400">0x00F8</td>
+                                    <td class="py-1.5 px-3 text-emerald-300 font-bold">248 mm</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">Bin height 1000mm &rarr; <strong>75.2% Full</strong></td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Temperature</td>
+                                    <td class="py-1.5 px-3 text-cyan-400">0x17</td>
+                                    <td class="py-1.5 px-3 text-cyan-300">23 °C</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">Normal range (&lt;65°C safe)</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Tilt / Fall Angle</td>
+                                    <td class="py-1.5 px-3 text-pink-400">0x66</td>
+                                    <td class="py-1.5 px-3 text-pink-300">102°</td>
+                                    <td class="py-1.5 px-3 text-rose-400 font-sans"><strong>FALL ALARM</strong>: Bin knocked over!</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Status Bits</td>
+                                    <td class="py-1.5 px-3 text-rose-400">0x0111</td>
+                                    <td class="py-1.5 px-3 text-rose-300">Fall + Fire</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">High-priority alert triggered</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Battery Voltage</td>
+                                    <td class="py-1.5 px-3 text-purple-400">0x0166</td>
+                                    <td class="py-1.5 px-3 text-purple-300">3.58 V (100%)</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">ER26500 LiSOCl2 battery healthy</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-1.5 px-3 text-slate-400">Device ID / IMEI</td>
+                                    <td class="py-1.5 px-3 text-blue-400">18607610...</td>
+                                    <td class="py-1.5 px-3 text-blue-300">DF703_933723</td>
+                                    <td class="py-1.5 px-3 text-slate-400 font-sans">Matched to Bin #B-201 (Celia)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- TWO-WAY DOWNLINK COMMAND GENERATOR (DEMONSTRATES BI-DIRECTIONAL IoT) -->
+                    <div class="pt-2 border-t border-white/10">
+                        <div class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                            <span class="flex items-center gap-1.5">
+                                <i class="fa-solid fa-paper-plane text-emerald-400"></i>
+                                <span>Downlink Remote Configuration (FOTA / Commands)</span>
+                            </span>
+                            <span class="text-[10px] text-emerald-400 font-mono">Bi-directional TCP</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="downlinkCmdSelect" class="flex-1 bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none">
+                                <option value="interval_1h">Set Upload Interval to 1 Hour (Cmd 0x01)</option>
+                                <option value="threshold_85">Set Full Alarm Threshold to 85% (Cmd 0x02)</option>
+                                <option value="fire_65">Set Fire Temp Threshold to 65°C (Cmd 0x03)</option>
+                            </select>
+                            <button onclick="sendDownlinkCommand()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs whitespace-nowrap transition">
+                                Send Downlink
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MQTT PROTOCOL & OPEN INGESTION HUB -->
+                <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col space-y-3">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-lg bg-parot-purple/20 text-parot-purple flex items-center justify-center font-bold text-xs">MQTT</span>
+                            <div>
+                                <div class="text-sm font-bold text-white">MQTT Broker (EMQX / AWS IoT Core)</div>
+                                <div class="text-[10px] text-slate-400">Supports standard JSON, Protobuf & Binary Telemetry</div>
+                            </div>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-parot-purple/20 text-parot-purple font-mono">PORT 8883 (mTLS)</span>
+                    </div>
+
+                    <!-- JSON Schema Payload View -->
+                    <div>
+                        <div class="text-xs font-semibold text-slate-300 mb-1 flex justify-between">
+                            <span>Normalized Telemetry JSON Payload</span>
+                            <span class="text-parot-purple text-[10px] font-mono">Topic: nexora/cairo/devices/+/telemetry</span>
+                        </div>
+                        <pre class="p-2.5 bg-slate-950 rounded-xl border border-white/10 font-mono text-[10px] text-slate-300 overflow-x-auto leading-relaxed">{
+  "timestamp": "2026-11-06T17:00:10Z",
+  "device_id": "MQTT_SEN_8819",
+  "vendor": "Generic_MQTT_Ultrasonic",
+  "protocol": "MQTT_v5.0",
+  "tenant_id": "nexora-egypt-01",
+  "metrics": {
+    "distance_mm": 190,
+    "bin_height_cm": 120,
+    "fill_percent": 84.1,
+    "temperature_c": 26.5,
+    "tilt_angle_deg": 4.2,
+    "battery_pct": 98,
+    "signal_rsrp_dbm": -82
+  },
+  "status_flags": {
+    "full_alarm": true,
+    "fire_alarm": false,
+    "tamper_alarm": false
+  }
+}</pre>
+                    </div>
+
+                    <!-- Multi-Protocol Support Matrix Card -->
+                    <div class="p-3 bg-slate-900/60 rounded-xl border border-white/5 space-y-2">
+                        <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                            <i class="fa-solid fa-layer-group text-emerald-400"></i>
+                            <span>Supported Ingestion Channels for NEXORA:</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="p-2 rounded bg-slate-800/80 border border-white/5">
+                                <span class="font-semibold text-white">Dingtek DF703 4G:</span><br>
+                                <span class="text-slate-400 text-[10px]">Direct TCP/IP ASCII socket listener</span>
+                            </div>
+                            <div class="p-2 rounded bg-slate-800/80 border border-white/5">
+                                <span class="font-semibold text-white">Standard MQTT:</span><br>
+                                <span class="text-slate-400 text-[10px]">Broker publish/subscribe (JSON/CBOR)</span>
+                            </div>
+                            <div class="p-2 rounded bg-slate-800/80 border border-white/5">
+                                <span class="font-semibold text-white">LoRaWAN:</span><br>
+                                <span class="text-slate-400 text-[10px]">ChirpStack & Actility webhooks</span>
+                            </div>
+                            <div class="p-2 rounded bg-slate-800/80 border border-white/5">
+                                <span class="font-semibold text-white">Cloud REST Webhooks:</span><br>
+                                <span class="text-slate-400 text-[10px]">HTTP POST payload adapters</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: 10K SCALABILITY SIMULATOR WITH LIVE CHART.JS (ITEM 2) -->
+        <section id="tab-scale" class="tab-content hidden flex-1 flex flex-col p-3 lg:p-5 overflow-y-auto space-y-4">
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-server text-parot-purple"></i>
+                        <span>High-Capacity Scalability Simulator (Up to 10,000 Sensors)</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5 max-w-2xl">
+                        Demonstrates the platform's distributed microservices capability. Slide the sensor load from 200 up to 10,000 active nodes to inspect live message throughput, latency, and estimated infrastructure sizing.
+                    </p>
+                </div>
+                <!-- Active Scale Tag -->
+                <div class="px-3.5 py-1.5 rounded-xl bg-parot-purple/20 border border-parot-purple/40 text-parot-purple font-mono font-bold text-xs">
+                    Simulating: <span id="scaleSensorCountLabel">200</span> Devices
+                </div>
+            </div>
+
+            <!-- SLIDER CONTROLLER -->
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 space-y-2.5">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-300">
+                    <span>Select Sensor Scale Tier:</span>
+                    <span class="text-emerald-400" id="scaleTierDescription">Tier 1: Pilot Phase (Current Contract Baseline)</span>
+                </div>
+                <input type="range" id="scaleRangeInput" min="200" max="10000" step="100" value="200" oninput="updateScaleSimulation(this.value)" class="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span onclick="setPresetScale(200)" class="cursor-pointer hover:text-emerald-400">200 (Current)</span>
+                    <span onclick="setPresetScale(1000)" class="cursor-pointer hover:text-emerald-400">1,000 Sensors</span>
+                    <span onclick="setPresetScale(5000)" class="cursor-pointer hover:text-emerald-400">5,000 Sensors</span>
+                    <span onclick="setPresetScale(10000)" class="cursor-pointer hover:text-emerald-400">10,000 Sensors (Mega-City)</span>
+                </div>
+            </div>
+
+            <!-- PERFORMANCE METRICS AT GIVEN SCALE -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Throughput (Msg/Sec)</div>
+                    <div class="text-xl font-bold text-white mt-0.5 font-mono" id="scaleThroughput">3.3 msgs/sec</div>
+                    <div class="text-[9px] text-emerald-400 mt-0.5">Queue Backlog: 0</div>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Ingestion Latency (P99)</div>
+                    <div class="text-xl font-bold text-emerald-400 mt-0.5 font-mono" id="scaleLatency">14.2 ms</div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">Sub-second SLA guaranteed</div>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Est. Monthly Cloud Infra</div>
+                    <div class="text-xl font-bold text-cyan-400 mt-0.5 font-mono" id="scaleCost">$45 / month</div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">AWS / Oracle KSA Cloud</div>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-white/5">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Daily Data Ingested</div>
+                    <div class="text-xl font-bold text-indigo-400 mt-0.5 font-mono" id="scaleDailyData">4.8 MB / day</div>
+                    <div class="text-[9px] text-slate-500 mt-0.5">TimescaleDB partitioned</div>
+                </div>
+            </div>
+
+            <!-- LIVE CHART.JS PERFORMANCE GRAPH -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="lg:col-span-2 glass-panel p-4 rounded-2xl border border-white/10">
+                    <div class="text-xs font-bold text-white mb-2 flex items-center justify-between">
+                        <span>Real-Time Ingestion Throughput & Latency Curve</span>
+                        <span class="text-[10px] text-slate-400 font-mono">Chart.js Live Metric Engine</span>
+                    </div>
+                    <div class="h-64 w-full">
+                        <canvas id="scalePerformanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- ARCHITECTURE TOPOLOGY -->
+                <div class="lg:col-span-1 glass-panel p-4 rounded-2xl border border-white/10 flex flex-col justify-between">
+                    <div class="text-xs font-bold text-white mb-2 flex items-center justify-between">
+                        <span>Cluster Container Pods</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-normal">K8s Auto-Scaled</span>
+                    </div>
+                    <div id="scaleArchDiagram" class="p-3 bg-slate-950 rounded-xl border border-white/5 font-mono text-[11px] text-slate-300 space-y-1.5 flex-1">
+                        <!-- Populated dynamically based on slider -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: COMMERCIAL TERMS, SLA & ACCEPTANCE MATRIX -->
+        <section id="tab-commercial" class="tab-content hidden flex-1 flex flex-col p-3 lg:p-5 overflow-y-auto space-y-4">
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-file-contract text-emerald-400"></i>
+                        <span>Commercial Agreement & Executive Compliance Summary</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5 max-w-2xl">
+                        PAROT's formal commitment to NEXORA across all commercial, warranty, source code ownership, and acceptance testing terms.
+                    </p>
+                </div>
+                <button onclick="downloadFormalProposal()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg transition">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Export Proposal Summary (PDF/MD)</span>
+                </button>
+            </div>
+
+            <!-- 11 POINTS COMPLIANCE MATRIX CARDS -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 1: Sensor Compatibility</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">100% CONFIRMED</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        Supports Dingtek DF703 4G via TCP socket + any third-party sensor via MQTT, HTTP Webhooks, or LoRaWAN.
+                    </p>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 4: White-Labeling & Resell</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">100% CONFIRMED</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        Full delivery under NEXORA's brand with custom domains, Arabic/English localized UI, and unlimited resale rights.
+                    </p>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 5: Source Code & IP Handover</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">100% CONFIRMED</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        Complete source code, database migrations, Docker/K8s manifests, and APIs transferred to NEXORA with perpetual rights.
+                    </p>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 6: 90-Day Warranty</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">100% ACCEPTED</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        90 days comprehensive defect correction and stability warranty after final Phase 2 sign-off.
+                    </p>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 7: 6-Month Support SLA</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">AGREED MATRIX</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        Severity 1 Critical: &lt;30 min response / &lt;4 hr resolution. Dedicated support lead and monthly health reports.
+                    </p>
+                </div>
+
+                <div class="glass-panel p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Item 10: 30 / 30 / 40 Payment</span>
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold">REVISED & APPROVED</span>
+                    </div>
+                    <p class="text-xs text-slate-300">
+                        30% Advance &bull; 30% Phase 1 Acceptance &bull; 40% Final Handover & Testing.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ACCEPTANCE CRITERIA MATRIX -->
+            <div class="glass-panel p-4 rounded-2xl border border-white/10 space-y-2.5">
+                <div class="text-sm font-bold text-white flex items-center justify-between border-b border-white/10 pb-2">
+                    <span>Phase 1 & Phase 2 Acceptance Test Plan (ATP)</span>
+                    <span class="text-xs text-emerald-400">14 Verified Test Scenarios</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-white/5 space-y-1.5">
+                        <div class="font-bold text-cyan-400 uppercase text-[10px]">Phase 1: Ingestion, Map & White-Label</div>
+                        <ul class="space-y-1 text-slate-300">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Multi-tenant data segregation (Client A vs Client B)</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Custom white-label branding, logos & colors</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Live Dingtek DF703 4G TCP hex frame parsing</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> MQTT telemetry subscription test</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Real-time map status & threshold alarm triggers</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-white/5 space-y-1.5">
+                        <div class="font-bold text-indigo-400 uppercase text-[10px]">Phase 2: Fleet Routing, APIs & Handover</div>
+                        <ul class="space-y-1 text-slate-300">
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> AI route optimization & driver mobile completion</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> REST API & outbound webhook dispatch (ERP/CAFM)</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> 1,000+ sensor load & stress benchmark (&lt;250ms)</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Disaster recovery failover & PITR snapshot test</li>
+                            <li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i> Complete source code repository & docs handover</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="glass-panel border-t border-white/5 px-4 py-2 text-xs flex flex-wrap justify-between items-center text-slate-500">
+        <div>
+            &copy; 2026 <strong class="text-slate-400">PAROT Corp</strong> (<a href="https://parotcorp.com" target="_blank" class="text-emerald-400 hover:underline">parotcorp.com</a>). All rights reserved.
+        </div>
+        <div class="flex items-center space-x-3 rtl:space-x-reverse text-[11px]">
+            <span>Platform: <span class="text-slate-300">PAROT WasteOS™ Enterprise</span></span>
+            <span>&bull;</span>
+            <span>Hardware: <span class="text-slate-300">Dingtek DF703 4G / NB-IoT</span></span>
+            <span>&bull;</span>
+            <span>Deployment: <span class="text-emerald-400">Egypt & Saudi Arabia</span></span>
+        </div>
+    </footer>
+
+    <!-- MODAL 1: WHITE-LABEL STUDIO (ITEM 4 DEMO) -->
+    <div id="whiteLabelModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-2xl border border-white/10 p-5 space-y-3.5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-palette text-parot-purple text-base"></i>
+                    <span class="font-bold text-white text-sm">White-Label Branding Studio</span>
+                </div>
+                <button onclick="closeWhiteLabelModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <p class="text-xs text-slate-400">
+                Experience instant white-label re-branding. Choose a preset or customize colors and branding to see the platform update live:
+            </p>
+
+            <div class="space-y-2.5">
+                <!-- PRESET BUTTONS -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="applyBrandPreset('nexora')" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-left flex items-center gap-2 transition">
+                        <span class="w-3.5 h-3.5 rounded-full bg-emerald-500"></span>
+                        <div>
+                            <div class="text-xs font-bold text-white">NEXORA WasteOS</div>
+                            <div class="text-[10px] text-slate-400">Emerald / Teal Theme</div>
+                        </div>
+                    </button>
+                    <button onclick="applyBrandPreset('parot')" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-parot-purple/40 text-left flex items-center gap-2 transition">
+                        <span class="w-3.5 h-3.5 rounded-full bg-parot-purple"></span>
+                        <div>
+                            <div class="text-xs font-bold text-white">PAROT Master</div>
+                            <div class="text-[10px] text-slate-400">Purple / Tech Theme</div>
+                        </div>
+                    </button>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Platform Brand Title</label>
+                    <input type="text" id="customBrandInput" value="NEXORA Smart Waste Platform" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Primary Color</label>
+                        <input type="color" id="customColorInput" value="#10B981" class="w-full h-8 bg-slate-900 border border-white/10 rounded-lg p-1 cursor-pointer">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Custom Domain Preview</label>
+                        <input type="text" id="customDomainInput" value="iot.nexora.com" class="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono outline-none" readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2.5 border-t border-white/10">
+                <button onclick="closeWhiteLabelModal()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Close</button>
+                <button onclick="saveCustomWhiteLabel()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">Apply Branding Live</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: DRIVER MOBILE APP SIMULATION (STEP-BY-STEP PROGRESS) -->
+    <div id="driverModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 w-full max-w-sm rounded-[32px] border-4 border-slate-700 p-4 shadow-2xl flex flex-col space-y-3 relative overflow-hidden">
+            <!-- Phone Notch -->
+            <div class="w-24 h-3.5 bg-slate-800 rounded-full mx-auto mb-1"></div>
+            
+            <div class="flex justify-between items-center px-1">
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-truck text-emerald-400"></i>
+                    <span class="font-bold text-xs text-white">Driver Console &bull; Truck #101</span>
+                </div>
+                <button onclick="closeDriverModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Route Stop Card -->
+            <div class="bg-slate-800 p-3 rounded-2xl border border-white/10 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-[10px] text-amber-400 font-bold uppercase" id="driverStopCounter">Current Stop: #1 of 8</span>
+                    <span class="text-[10px] text-emerald-400 font-mono" id="driverRouteProgress">12% Completed</span>
+                </div>
+                <div class="font-bold text-white text-sm" id="driverBinTitle">Bin #B-108 (Madinaty Commercial)</div>
+                <div class="text-xs text-slate-400">Current Fill: <span class="text-rose-400 font-bold font-mono" id="driverBinFill">94% (Critical Full)</span></div>
+                <div class="text-xs text-slate-400">Distance to Waste: <span class="text-slate-200 font-mono">60 mm</span> &bull; Temp: 28°C</div>
+                
+                <div class="pt-2">
+                    <button onclick="completeCurrentStop()" id="completeStopBtn" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition">
+                        <i class="fa-solid fa-check-circle"></i>
+                        <span>Confirm Emptied & Cleaned</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upcoming Stops in Path -->
+            <div class="space-y-1.5 max-h-44 overflow-y-auto px-1">
+                <div class="text-[11px] font-semibold text-slate-400">Upcoming Route Stops:</div>
+                <div id="driverUpcomingList" class="space-y-1.5">
+                    <div class="p-2 rounded-xl bg-slate-950/80 border border-white/5 text-[11px] flex justify-between items-center">
+                        <span>#2 Bin #B-114 (New Capital Zone 2)</span>
+                        <span class="text-amber-400 font-mono">88%</span>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-950/80 border border-white/5 text-[11px] flex justify-between items-center">
+                        <span>#3 Bin #B-205 (AUC Tagamoa Campus)</span>
+                        <span class="text-rose-400 font-mono">91%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center text-[10px] text-slate-500 pt-1">
+                Turn-by-turn navigation synced &bull; Offline PWA ready
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APPLICATION CORE -->
+    <script>
+        // ==========================================
+        // 1. DATASETS & STATE
+        // ==========================================
+        let currentLang = 'en';
+        let currentTenant = 'nexora';
+        let currentRegion = 'cairo';
+        let currentBaseLayer = 'dark';
+        let map = null;
+        let routingMap = null;
+        let markersGroup = null;
+        let routePolyline = null;
+        let binsData = [];
+        let simulationInterval = null;
+        let scaleChart = null;
+        let currentDriverStopIndex = 1;
+
+        // Base tile layers (NO WATERMARK, 100% RELIABLE)
+        let tileLayers = {
+            darkBase: null,
+            darkRef: null,
+            satellite: null,
+            streets: null
+        };
+
+        // BILINGUAL DICTIONARY
+        const i18n = {
+            en: {
+                system_status: "Live Ingestion Engine Active",
+                meeting_mode: "Enterprise Commercial Demo • PAROT x NEXORA",
+                tenant_label: "Tenant:",
+                region_label: "Region:",
+                nav_dashboard: "Live Operations",
+                nav_routing: "AI Routing",
+                nav_sensors: "DF703 & MQTT",
+                nav_scale: "10k Scale",
+                nav_commercial: "Terms & SLA",
+                whitelabel_btn: "White-Label",
+                driver_app_btn: "Driver App",
+                metric_total_bins: "Total Connected Bins",
+                metric_full_bins: "Full / Critical (>80%)",
+                metric_active_alarms: "Active Critical Alarms",
+                metric_fleet_active: "Active Fleet Trucks",
+                metric_co2_saved: "CO₂ Emission Saved",
+                metric_sla_score: "SLA Compliance",
+                live_map_title: "Live Assets",
+                simulate_alarm_btn: "Simulate Alarm",
+                legend_title: "Bin Fill Status",
+                critical_queue_title: "Critical Bins & Alarms",
+                telemetry_stream_title: "Live Protocol Feed",
+                route_optimizer_title: "AI Smart Route Optimizer & Fleet Dispatch",
+                calc_route_btn: "Generate Optimal Route (8 Bins)",
+                dispatch_btn: "Dispatch to Driver App"
+            },
+            ar: {
+                system_status: "محرك استقبال البيانات المباشر نشط",
+                meeting_mode: "العرض التجاري والتقني • PAROT x NEXORA",
+                tenant_label: "المؤسسة / العميل:",
+                region_label: "المنطقة:",
+                nav_dashboard: "العمليات الحية",
+                nav_routing: "المسارات الذكية (AI)",
+                nav_sensors: "حساسات DF703 و MQTT",
+                nav_scale: "محاكي 10k",
+                nav_commercial: "العقد والاتفاقية (SLA)",
+                whitelabel_btn: "الهوية البصرية",
+                driver_app_btn: "تطبيق السائق",
+                metric_total_bins: "إجمالي الحاويات المتصلة",
+                metric_full_bins: "الحاويات الممتلئة (>80%)",
+                metric_active_alarms: "الإنذارات الحرجة النشطة",
+                metric_fleet_active: "شاحنات الأسطول النشطة",
+                metric_co2_saved: "خفض الانبعاثات الكربونية",
+                metric_sla_score: "الالتزام باتفاقية الخدمة",
+                live_map_title: "الأصول الحية",
+                simulate_alarm_btn: "محاكاة إنذار",
+                legend_title: "دليل حالات الحاويات",
+                critical_queue_title: "الحاويات الحرجة والإنذارات",
+                telemetry_stream_title: "بث البيانات المباشر",
+                route_optimizer_title: "توليد مسارات الجمع الذكية بالذكاء الاصطناعي",
+                calc_route_btn: "حساب المسار الأمثل (8 حاويات)",
+                dispatch_btn: "إرسال المسار لتطبيق السائق"
+            }
+        };
+
+        // Realistic coordinates for Cairo (Madinaty, New Capital, Tagamoa) and Riyadh (KAFD, Olaya)
+        const CAIRO_BASE = { lat: 30.0750, lng: 31.6200 }; // Centered near Madinaty / New Capital
+        const RIYADH_BASE = { lat: 24.7400, lng: 46.6500 }; // Centered near KAFD & Olaya
+
+        function generateSensorsDatabase() {
+            const list = [];
+            // 120 Bins in Cairo (Madinaty, New Capital, Tagamoa 90th St)
+            for (let i = 1; i <= 120; i++) {
+                const isFull = i <= 18;
+                const isAlarm = i === 1 || i === 2;
+                const fill = isAlarm ? 95 : (isFull ? Math.floor(82 + Math.random() * 15) : Math.floor(15 + Math.random() * 60));
+                
+                // Distribute between Madinaty and New Capital road clusters
+                const clusterLat = (i % 2 === 0) ? 30.1180 : 30.0150;
+                const clusterLng = (i % 2 === 0) ? 31.9030 : 31.5200;
+
+                list.push({
+                    id: i,
+                    code: `B-${100 + i}`,
+                    name: `Bin #B-${100 + i} (${i % 2 === 0 ? 'Madinaty Sector ' + (i%5 + 1) : 'New Capital Zone ' + (i%4 + 1)})`,
+                    city: 'cairo',
+                    lat: clusterLat + (Math.random() - 0.5) * 0.045,
+                    lng: clusterLng + (Math.random() - 0.5) * 0.055,
+                    fill: fill,
+                    heightCm: 100,
+                    distanceMm: Math.floor((1000 * (100 - fill)) / 100),
+                    temp: isAlarm ? 68 : Math.floor(22 + Math.random() * 8),
+                    angle: isAlarm && i === 1 ? 88 : Math.floor(Math.random() * 10),
+                    battery: 100,
+                    alarmFire: isAlarm && i === 2,
+                    alarmFall: isAlarm && i === 1,
+                    imei: `186076107993${3720 + i}`,
+                    model: 'Dingtek DF703 4G',
+                    lastSeen: 'Just now'
+                });
+            }
+
+            // 80 Bins in Riyadh (KAFD, Olaya Smart District)
+            for (let i = 121; i <= 200; i++) {
+                const isFull = i <= 130;
+                const isAlarm = i === 121;
+                const fill = isAlarm ? 92 : (isFull ? Math.floor(82 + Math.random() * 14) : Math.floor(10 + Math.random() * 65));
+                
+                const clusterLat = (i % 2 === 0) ? 24.7670 : 24.7115;
+                const clusterLng = (i % 2 === 0) ? 46.6430 : 46.6744;
+
+                list.push({
+                    id: i,
+                    code: `B-${100 + i}`,
+                    name: `Bin #B-${100 + i} (${i % 2 === 0 ? 'KAFD Financial Plaza' : 'Olaya Smart Quarter'})`,
+                    city: 'riyadh',
+                    lat: clusterLat + (Math.random() - 0.5) * 0.035,
+                    lng: clusterLng + (Math.random() - 0.5) * 0.035,
+                    fill: fill,
+                    heightCm: 120,
+                    distanceMm: Math.floor((1200 * (100 - fill)) / 100),
+                    temp: isAlarm ? 71 : Math.floor(25 + Math.random() * 9),
+                    angle: isAlarm ? 48 : Math.floor(Math.random() * 8),
+                    battery: 98,
+                    alarmFire: isAlarm,
+                    alarmFall: false,
+                    imei: `186076107994${1000 + i}`,
+                    model: 'Dingtek DF703 4G',
+                    lastSeen: 'Just now'
+                });
+            }
+            return list;
+        }
+
+        // ==========================================
+        // 2. INITIALIZATION
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            binsData = generateSensorsDatabase();
+            initLeafletMap();
+            renderCriticalQueue();
+            startTelemetrySimulation();
+            initScaleChart();
+            updateScaleSimulation(200);
+        });
+
+        // ==========================================
+        // 3. LEAFLET MAP INITIALIZATION (ESRI CLEAN TILES - NO WATERMARK)
+        // ==========================================
+        function initLeafletMap() {
+            map = L.map('leafletMap', {
+                center: [30.1180, 31.9030], // Start centered on Madinaty
+                zoom: 12,
+                zoomControl: true
+            });
+
+            // Initialize tile layers (No API keys required, no watermarks, high-speed worldwide CDN)
+            tileLayers.darkBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri &mdash; High-Precision IoT Basemap',
+                maxZoom: 16
+            });
+            tileLayers.darkRef = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 16
+            });
+
+            tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri World Imagery',
+                maxZoom: 17
+            });
+
+            tileLayers.streets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri StreetMap',
+                maxZoom: 17
+            });
+
+            // Default: Dark Base + Reference
+            tileLayers.darkBase.addTo(map);
+            tileLayers.darkRef.addTo(map);
+
+            markersGroup = L.featureGroup().addTo(map);
+            renderMapMarkers('all');
+        }
+
+        function setMapBaseLayer(layerType, evt) {
+            currentBaseLayer = layerType;
+            if (evt) {
+                document.querySelectorAll('.map-layer-btn').forEach(b => {
+                    b.classList.remove('bg-slate-700', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                evt.currentTarget.classList.add('bg-slate-700', 'text-white');
+                evt.currentTarget.classList.remove('text-slate-400');
+            }
+
+            // Remove existing
+            map.removeLayer(tileLayers.darkBase);
+            map.removeLayer(tileLayers.darkRef);
+            map.removeLayer(tileLayers.satellite);
+            map.removeLayer(tileLayers.streets);
+
+            if (layerType === 'dark') {
+                tileLayers.darkBase.addTo(map);
+                tileLayers.darkRef.addTo(map);
+            } else if (layerType === 'satellite') {
+                tileLayers.satellite.addTo(map);
+                tileLayers.darkRef.addTo(map); // Keep street labels over satellite
+            } else if (layerType === 'streets') {
+                tileLayers.streets.addTo(map);
+            }
+
+            showToast(`Map layer switched to ${layerType.toUpperCase()}`, 'info');
+        }
+
+        function getMarkerColor(bin) {
+            if (bin.alarmFire || bin.alarmFall) return '#8B5CF6'; // Purple for critical alarm
+            if (bin.fill >= 80) return '#EF4444'; // Red for full
+            if (bin.fill >= 50) return '#F59E0B'; // Amber
+            return '#10B981'; // Green
+        }
+
+        function renderMapMarkers(filterType) {
+            if (!markersGroup) return;
+            markersGroup.clearLayers();
+
+            const currentCity = currentRegion === 'all' ? null : currentRegion;
+
+            binsData.forEach(bin => {
+                if (currentCity && bin.city !== currentCity) return;
+
+                if (filterType === 'critical' && bin.fill < 80) return;
+                if (filterType === 'alarm' && !bin.alarmFire && !bin.alarmFall) return;
+
+                const color = getMarkerColor(bin);
+                const isAlarm = bin.alarmFire || bin.alarmFall;
+
+                const marker = L.circleMarker([bin.lat, bin.lng], {
+                    radius: isAlarm ? 9 : (bin.fill >= 80 ? 7.5 : 5.5),
+                    fillColor: color,
+                    color: '#ffffff',
+                    weight: isAlarm ? 2.5 : 1.5,
+                    opacity: 0.95,
+                    fillOpacity: 0.85
+                });
+
+                // Rich Interactive Popup
+                const popupContent = `
+                    <div style="min-width: 220px; font-family: Outfit, sans-serif;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; margin-bottom: 6px;">
+                            <strong style="color: #ffffff; font-size: 13px;">${bin.name}</strong>
+                            <span style="background: ${color}33; color: ${color}; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold;">
+                                ${bin.fill}% FULL
+                            </span>
+                        </div>
+                        <div style="font-size: 11px; color: #94a3b8; line-height: 1.6;">
+                            <div><strong>Hardware:</strong> ${bin.model}</div>
+                            <div><strong>IMEI:</strong> <span style="font-family: monospace;">${bin.imei}</span></div>
+                            <div><strong>Distance to Waste:</strong> ${bin.distanceMm} mm</div>
+                            <div><strong>Internal Temp:</strong> ${bin.temp} °C ${bin.temp > 60 ? '🔥' : '✅'}</div>
+                            <div><strong>Tilt Angle:</strong> ${bin.angle}° ${bin.angle > 45 ? '⚠️' : '✅'}</div>
+                            <div><strong>Battery:</strong> ${bin.battery}% (3.6V ER26500)</div>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <button onclick="scheduleBinCollection('${bin.code}')" style="width: 100%; background: #10B981; color: white; border: none; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer;">
+                                Schedule Urgent Pickup
+                            </button>
+                        </div>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                markersGroup.addLayer(marker);
+            });
+        }
+
+        function filterMapMarkers(type, evt) {
+            if (evt) {
+                document.querySelectorAll('.map-filter-btn').forEach(b => {
+                    b.classList.remove('bg-emerald-500', 'text-white');
+                    b.classList.add('text-slate-300');
+                });
+                evt.currentTarget.classList.add('bg-emerald-500', 'text-white');
+                evt.currentTarget.classList.remove('text-slate-300');
+            }
+            renderMapMarkers(type);
+        }
+
+        function flyToCity(city) {
+            currentRegion = city;
+            document.getElementById('regionSelect').value = city;
+            if (city === 'cairo') {
+                map.flyTo([30.1180, 31.9030], 12);
+                showToast("Flying to Cairo & Madinaty Smart Fleet (120 Bins)", "info");
+            } else if (city === 'riyadh') {
+                map.flyTo([RIYADH_BASE.lat, RIYADH_BASE.lng], 12);
+                showToast("Flying to Riyadh KAFD & Olaya Smart City (80 Bins)", "info");
+            }
+            renderMapMarkers('all');
+        }
+
+        function onRegionChange(val) {
+            flyToCity(val);
+        }
+
+        // ==========================================
+        // 4. CRITICAL QUEUE & TELEMETRY STREAM
+        // ==========================================
+        function renderCriticalQueue() {
+            const container = document.getElementById('criticalQueueList');
+            if (!container) return;
+            const criticals = binsData.filter(b => b.fill >= 80 || b.alarmFire || b.alarmFall).slice(0, 8);
+
+            container.innerHTML = criticals.map(b => {
+                let badge = `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">${b.fill}% FULL</span>`;
+                if (b.alarmFire) badge = `<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold animate-pulse">🔥 FIRE</span>`;
+                if (b.alarmFall) badge = `<span class="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">⚠️ TILT ${b.angle}°</span>`;
+
+                return `
+                    <div class="p-2 rounded-xl bg-slate-900/90 border border-white/5 flex items-center justify-between hover:border-white/20 transition cursor-pointer" onclick="zoomToBin(${b.id})">
+                        <div>
+                            <div class="text-xs font-semibold text-white">${b.name}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">${b.imei} &bull; ${b.temp}°C</div>
+                        </div>
+                        <div>${badge}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function zoomToBin(id) {
+            const bin = binsData.find(b => b.id === id);
+            if (!bin || !map) return;
+            map.flyTo([bin.lat, bin.lng], 16);
+            showToast(`Inspecting ${bin.name} (${bin.fill}% full)`, "info");
+        }
+
+        function startTelemetrySimulation() {
+            const feed = document.getElementById('liveTelemetryLog');
+            if (!feed) return;
+
+            simulationInterval = setInterval(() => {
+                const randomBin = binsData[Math.floor(Math.random() * binsData.length)];
+                randomBin.fill = Math.min(100, Math.max(5, randomBin.fill + (Math.random() > 0.6 ? 1 : 0)));
+                randomBin.distanceMm = Math.floor((1000 * (100 - randomBin.fill)) / 100);
+
+                const entry = document.createElement('div');
+                entry.className = "flex items-center justify-between border-b border-white/5 pb-1";
+                entry.innerHTML = `
+                    <span><strong class="text-emerald-400">[TCP/4G]</strong> ${randomBin.code}</span>
+                    <span class="text-slate-400">${randomBin.fill}%</span>
+                    <span class="text-slate-500">${randomBin.distanceMm}mm</span>
+                    <span class="text-cyan-400">${randomBin.temp}°C</span>
+                `;
+
+                feed.insertBefore(entry, feed.firstChild);
+                if (feed.children.length > 25) {
+                    feed.removeChild(feed.lastChild);
+                }
+            }, 1200);
+        }
+
+        function triggerSimulatedEmergency() {
+            const target = binsData[0];
+            target.alarmFire = true;
+            target.temp = 74;
+            target.fill = 98;
+            renderMapMarkers('all');
+            renderCriticalQueue();
+            map.flyTo([target.lat, target.lng], 16);
+
+            playAudioBeep(660, 0.25);
+            setTimeout(() => playAudioBeep(880, 0.4), 300);
+
+            showToast(`🚨 HIGH PRIORITY FIRE ALARM!\nBin: ${target.name}\nTemperature: 74°C (Threshold >65°C exceeded)\nAlert dispatched to Dispatcher & Drivers.`, 'error');
+        }
+
+        // ==========================================
+        // 5. AI ROUTE OPTIMIZATION TAB
+        // ==========================================
+        function initRoutingMap() {
+            if (routingMap) return;
+            routingMap = L.map('routingLeafletMap', {
+                center: [30.1180, 31.9030],
+                zoom: 12
+            });
+
+            // Same clean Esri Dark Gray layer
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 16
+            }).addTo(routingMap);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 16
+            }).addTo(routingMap);
+        }
+
+        function generateOptimizedRoute() {
+            initRoutingMap();
+            const criticals = binsData.filter(b => b.city === 'cairo' && b.fill >= 80).slice(0, 8);
+            if (criticals.length === 0) return;
+
+            const orderedStops = [...criticals];
+            const latlngs = orderedStops.map(b => [b.lat, b.lng]);
+
+            const depot = [30.1000, 31.8800]; // Madinaty Main Depot
+            latlngs.unshift(depot);
+            latlngs.push(depot);
+
+            if (routePolyline) routingMap.removeLayer(routePolyline);
+
+            // Draw glowing green route line
+            routePolyline = L.polyline(latlngs, {
+                color: '#10B981',
+                weight: 4,
+                opacity: 0.95,
+                dashArray: '8, 8'
+            }).addTo(routingMap);
+
+            routingMap.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
+
+            // Add Stop Markers with numbered icons
+            orderedStops.forEach((b, idx) => {
+                L.circleMarker([b.lat, b.lng], {
+                    radius: 9,
+                    fillColor: '#EF4444',
+                    color: '#ffffff',
+                    weight: 2,
+                    fillOpacity: 1
+                }).bindPopup(`<b>Stop #${idx+1}:</b> ${b.name}<br>Fill: ${b.fill}%`).addTo(routingMap);
+            });
+
+            document.getElementById('routeOptimizationBanner').classList.remove('hidden');
+            const dispatchBtn = document.getElementById('dispatchBtn');
+            dispatchBtn.disabled = false;
+            dispatchBtn.classList.remove('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+            dispatchBtn.classList.add('bg-amber-600', 'hover:bg-amber-500', 'text-white');
+
+            document.getElementById('routeBadge').className = "text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30";
+            document.getElementById('routeBadge').innerText = "AI Optimized";
+
+            // Render Stops List
+            const list = document.getElementById('routeStopsList');
+            list.innerHTML = orderedStops.map((b, idx) => `
+                <div class="p-2.5 rounded-xl bg-slate-900/90 border border-white/5 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">${idx+1}</span>
+                        <div>
+                            <div class="font-bold text-white text-xs">${b.name}</div>
+                            <div class="text-[10px] text-slate-400">Fill: <span class="text-rose-400 font-bold">${b.fill}%</span> &bull; 1.8 km</div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">ETA +${(idx+1)*5}m</span>
+                </div>
+            `).join('');
+
+            playAudioBeep(520, 0.2);
+            showToast("AI Ant-Colony route calculated: 8 critical bins grouped (28.4% fuel savings)", "success");
+        }
+
+        function dispatchRouteToDrivers() {
+            showToast("Route #CR-104 dispatched to Driver Ahmed Mostafa's mobile console", "success");
+            openDriverModal();
+        }
+
+        function completeCurrentStop() {
+            const bin = binsData[currentDriverStopIndex - 1] || binsData[0];
+            bin.fill = 5;
+            bin.distanceMm = 950;
+            bin.alarmFire = false;
+            bin.alarmFall = false;
+            renderMapMarkers('all');
+            renderCriticalQueue();
+
+            currentDriverStopIndex++;
+            playAudioBeep(880, 0.3);
+
+            if (currentDriverStopIndex <= 8) {
+                const nextBin = binsData[currentDriverStopIndex - 1];
+                document.getElementById('driverStopCounter').innerText = `Current Stop: #${currentDriverStopIndex} of 8`;
+                document.getElementById('driverRouteProgress').innerText = `${Math.round((currentDriverStopIndex/8)*100)}% Completed`;
+                document.getElementById('driverBinTitle').innerText = nextBin.name;
+                document.getElementById('driverBinFill').innerText = `${nextBin.fill}% (Critical Full)`;
+                showToast(`Stop #${currentDriverStopIndex - 1} completed! Proceeding to ${nextBin.name}`, "success");
+            } else {
+                showToast("🎉 All 8 route stops completed! Bin collection finished.", "success");
+                closeDriverModal();
+                currentDriverStopIndex = 1;
+            }
+        }
+
+        // ==========================================
+        // 6. SCALABILITY SIMULATOR WITH CHART.JS (ITEM 2)
+        // ==========================================
+        function initScaleChart() {
+            const ctx = document.getElementById('scalePerformanceChart');
+            if (!ctx) return;
+
+            scaleChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['200', '1,000', '2,500', '5,000', '7,500', '10,000'],
+                    datasets: [
+                        {
+                            label: 'Throughput (Msg/Sec)',
+                            data: [3.3, 16.5, 41.2, 82.5, 123.8, 165.0],
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'P99 Latency (ms)',
+                            data: [14.2, 14.8, 15.4, 16.5, 17.8, 19.2],
+                            borderColor: '#8B5CF6',
+                            borderDash: [5, 5],
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#94a3b8', font: { family: 'Outfit', size: 11 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { family: 'Outfit' } }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#10B981', font: { family: 'Outfit' } },
+                            title: { display: true, text: 'Throughput (msgs/sec)', color: '#10B981' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#8B5CF6', font: { family: 'Outfit' } },
+                            title: { display: true, text: 'Latency (ms)', color: '#8B5CF6' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateScaleSimulation(count) {
+            count = parseInt(count);
+            document.getElementById('scaleSensorCountLabel').innerText = count.toLocaleString();
+
+            const throughput = (count * 0.0165).toFixed(1);
+            const latency = (14 + (count / 2500)).toFixed(1);
+            const cost = Math.floor(count * 0.18 + 15);
+            const dailyMB = (count * 0.024).toFixed(1);
+
+            document.getElementById('scaleThroughput').innerText = `${throughput} msgs/sec`;
+            document.getElementById('scaleLatency').innerText = `${latency} ms`;
+            document.getElementById('scaleCost').innerText = `$${cost} / month`;
+            document.getElementById('scaleDailyData').innerText = `${dailyMB} MB / day`;
+
+            let tier = "Tier 1: 200 Sensors (Base Pilot Baseline)";
+            let pods = 2;
+            if (count >= 1000 && count < 5000) { tier = "Tier 2: 1,000 Sensors (District Scale)"; pods = 4; }
+            if (count >= 5000 && count < 10000) { tier = "Tier 3: 5,000 Sensors (City-Wide Scale)"; pods = 8; }
+            if (count >= 10000) { tier = "Tier 4: 10,000 Sensors (Mega-City / Regional Fleet)"; pods = 16; }
+            document.getElementById('scaleTierDescription').innerText = tier;
+
+            const arch = document.getElementById('scaleArchDiagram');
+            if (arch) {
+                arch.innerHTML = `
+                    <div class="text-emerald-400">// Ingestion Layer Topology (${count.toLocaleString()} Connected Sensors)</div>
+                    <div>&bull; Load Balancer: NGINX Plus / AWS ALB (Active-Active)</div>
+                    <div>&bull; TCP Socket Gateways: ${pods}x Workers (Go/Netty)</div>
+                    <div>&bull; MQTT Clustered Broker: ${Math.ceil(pods/2)}x EMQX Nodes</div>
+                    <div>&bull; Queue Pipeline: Redis 7.2 Cluster (${Math.ceil(count*0.12)} MB allocated)</div>
+                    <div>&bull; DB Engine: PostgreSQL 16 + TimescaleDB Hypertables</div>
+                    <div>&bull; Target SLA: 99.98% uptime, Zero packet loss</div>
+                `;
+            }
+        }
+
+        function setPresetScale(count) {
+            document.getElementById('scaleRangeInput').value = count;
+            updateScaleSimulation(count);
+            showToast(`Scale simulation preset set to ${count.toLocaleString()} sensors`, 'info');
+        }
+
+        // ==========================================
+        // 7. WHITE-LABEL ENGINE & MULTI-TENANCY (ITEM 3 & 4)
+        // ==========================================
+        function openWhiteLabelModal() {
+            document.getElementById('whiteLabelModal').classList.remove('hidden');
+        }
+        function closeWhiteLabelModal() {
+            document.getElementById('whiteLabelModal').classList.add('hidden');
+        }
+        function openDriverModal() {
+            document.getElementById('driverModal').classList.remove('hidden');
+        }
+        function closeDriverModal() {
+            document.getElementById('driverModal').classList.add('hidden');
+        }
+
+        function applyBrandPreset(preset) {
+            if (preset === 'nexora') {
+                document.getElementById('customBrandInput').value = "NEXORA Smart Waste Platform";
+                document.getElementById('customColorInput').value = "#10B981";
+                document.getElementById('customDomainInput').value = "iot.nexora.com";
+            } else if (preset === 'parot') {
+                document.getElementById('customBrandInput').value = "PAROT WasteOS™ Enterprise";
+                document.getElementById('customColorInput').value = "#8B5CF6";
+                document.getElementById('customDomainInput').value = "iot.parotcorp.com";
+            }
+        }
+
+        function saveCustomWhiteLabel() {
+            const title = document.getElementById('customBrandInput').value;
+            const color = document.getElementById('customColorInput').value;
+            const domain = document.getElementById('customDomainInput').value;
+
+            document.getElementById('brandTitle').innerText = title;
+            document.getElementById('brandSubtitle').innerText = `${domain} • Powered by PAROT`;
+
+            document.documentElement.style.setProperty('--primary-accent', color);
+
+            closeWhiteLabelModal();
+            showToast(`🎨 White-label branding applied:\nTitle: ${title}\nDomain: ${domain}`, "success");
+        }
+
+        function onTenantChange(tenantKey) {
+            currentTenant = tenantKey;
+            if (tenantKey === 'nexora') {
+                applyBrandPreset('nexora');
+                saveCustomWhiteLabel();
+            } else if (tenantKey === 'tmg') {
+                document.getElementById('brandTitle').innerText = "TMG Madinaty Waste Management";
+                document.getElementById('brandSubtitle').innerText = "waste.tmg.com.eg • Powered by PAROT";
+                flyToCity('cairo');
+            } else if (tenantKey === 'riyadh') {
+                document.getElementById('brandTitle').innerText = "Riyadh Smart City Platform";
+                document.getElementById('brandSubtitle').innerText = "smartbins.riyadh.gov.sa • Powered by PAROT";
+                flyToCity('riyadh');
+            } else {
+                applyBrandPreset('parot');
+                saveCustomWhiteLabel();
+            }
+        }
+
+        // ==========================================
+        // 8. TAB NAVIGATION & BILINGUAL
+        // ==========================================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-emerald-400', 'bg-emerald-500/10', 'border-emerald-500/20');
+                btn.classList.add('text-slate-400');
+            });
+
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.remove('hidden');
+
+            const navBtn = document.getElementById(`nav-${tabId}`);
+            if (navBtn) {
+                navBtn.classList.add('text-emerald-400', 'bg-emerald-500/10', 'border-emerald-500/20');
+                navBtn.classList.remove('text-slate-400');
+            }
+
+            if (tabId === 'routing') {
+                setTimeout(initRoutingMap, 100);
+            }
+            if (tabId === 'dashboard' && map) {
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+        }
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'en' ? 'ar' : 'en';
+            document.documentElement.setAttribute('dir', currentLang === 'ar' ? 'rtl' : 'ltr');
+            document.getElementById('langLabel').innerText = currentLang === 'ar' ? 'English' : 'العربية';
+
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (i18n[currentLang] && i18n[currentLang][key]) {
+                    el.innerText = i18n[currentLang][key];
+                }
+            });
+
+            showToast(currentLang === 'ar' ? "تم التحويل إلى اللغة العربية بنجاح" : "Switched to English successfully", "info");
+        }
+
+        function downloadFormalProposal() {
+            window.open('https://parotcorp.com', '_blank');
+        }
+
+        function injectSimulatedPacket() {
+            showToast("📥 Sample Dingtek DF703 frame received over TCP port 12345.", "success");
+            switchTab('dashboard');
+        }
+
+        function scheduleBinCollection(code) {
+            showToast(`🗓️ Pickup scheduled for ${code}. Stop queued for next dispatch batch.`, "success");
+        }
+
+        function sendDownlinkCommand() {
+            const cmd = document.getElementById('downlinkCmdSelect').value;
+            let hex = "80 00 01 02 0B 01 01 00 00 00 00 81";
+            if (cmd === 'threshold_85') hex = "80 00 01 02 0B 02 55 00 00 00 00 81";
+            if (cmd === 'fire_65') hex = "80 00 01 02 0B 03 41 00 00 00 00 81";
+
+            playAudioBeep(700, 0.2);
+            showToast(`📡 Downlink Transmitted to DF703:\nPayload: ${hex}\nStatus: ACK Confirmed by hardware (0x03)`, "success");
+        }
+
+        // ==========================================
+        // 9. TOAST NOTIFICATION & AUDIO HELPER
+        // ==========================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `toast-enter pointer-events-auto p-3.5 rounded-xl border shadow-2xl flex items-start gap-3 text-xs transition ${
+                type === 'error' ? 'bg-rose-950/95 border-rose-500/50 text-rose-200' :
+                type === 'success' ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200' :
+                'bg-slate-900/95 border-white/20 text-slate-200'
+            }`;
+
+            const iconClass = type === 'error' ? 'fa-solid fa-triangle-exclamation text-rose-400' :
+                             type === 'success' ? 'fa-solid fa-circle-check text-emerald-400' :
+                             'fa-solid fa-circle-info text-cyan-400';
+
+            toast.innerHTML = `
+                <i class="${iconClass} text-base mt-0.5 flex-shrink-0"></i>
+                <div class="flex-1 whitespace-pre-line leading-relaxed">${message}</div>
+                <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white flex-shrink-0"><i class="fa-solid fa-xmark text-sm"></i></button>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function playAudioBeep(freq, duration) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.08, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch (e) {}
+        }
+    </script>
+</body>
+</html>

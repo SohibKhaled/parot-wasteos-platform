@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PAROT | Technical & Commercial Proposal - NEXORA</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm 15mm 20mm 15mm;
+            @bottom-right {
+                content: counter(page);
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #1e293b;
+            line-height: 1.5;
+            font-size: 11pt;
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+        .cover {
+            page-break-after: always;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header-logo img {
+            height: 50px;
+        }
+        .cover-title {
+            margin-top: 100px;
+        }
+        .badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            font-size: 10pt;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        h1 {
+            font-size: 30pt;
+            color: #0f172a;
+            margin: 0 0 10px 0;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        .subtitle {
+            font-size: 14pt;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        .meta-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 40px;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            font-size: 10.5pt;
+        }
+        .meta-item strong {
+            color: #0f172a;
+        }
+        .cover-footer {
+            border-top: 2px solid #e2e8f0;
+            padding-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            color: #64748b;
+            font-size: 9.5pt;
+        }
+        
+        /* Content pages */
+        .section-header {
+            border-bottom: 2px solid #10b981;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            color: #0f172a;
+            font-size: 16pt;
+            font-weight: 700;
+        }
+        h3 {
+            font-size: 12pt;
+            color: #0f172a;
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+        p {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #334155;
+            text-align: justify;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0 20px 0;
+            font-size: 9.5pt;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: 700;
+        }
+        tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+        .tag-ok {
+            background: #dcfce7;
+            color: #15803d;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 8.5pt;
+        }
+        .callout {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 10pt;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- COVER PAGE -->
+    <div class="cover">
+        <div class="header-logo">
+            <img src="https://parotcorp.com/Images/Logo.png" alt="PAROT">
+            <div>
+                <strong style="font-size: 16pt; color: #0f172a;">PAROT Corp</strong><br>
+                <span style="font-size: 10pt; color: #64748b;">Transforming Vision into Digital Reality &bull; parotcorp.com</span>
+            </div>
+        </div>
+
+        <div class="cover-title">
+            <span class="badge">Commercial & Technical Proposal</span>
+            <h1>Enterprise Smart Waste & IoT Management Platform</h1>
+            <div class="subtitle">Multi-Tenant, White-Label IoT Fleet Management & Route Optimization</div>
+
+            <div class="meta-box">
+                <div class="meta-grid">
+                    <div class="meta-item"><strong>Client / Partner:</strong> NEXORA</div>
+                    <div class="meta-item"><strong>Hardware Scope:</strong> Dingtek DF703 4G & MQTT Sensors</div>
+                    <div class="meta-item"><strong>Target Markets:</strong> Egypt, Saudi Arabia (KSA) & GCC</div>
+                    <div class="meta-item"><strong>Document Version:</strong> 2.0 (Post-Meeting Final)</div>
+                    <div class="meta-item"><strong>Prepared By:</strong> PAROT Engineering & Solutions Team</div>
+                    <div class="meta-item"><strong>Submission Date:</strong> November 2026</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cover-footer">
+            <span>PAROT Corp &bull; Smart Infrastructure & Digital Platforms</span>
+            <span>Confidential &bull; Prepared exclusively for NEXORA</span>
+        </div>
+    </div>
+
+    <!-- EXECUTIVE BRIEF & COMPLIANCE SUMMARY -->
+    <h2 class="section-header">1. Executive Summary & Solution Alignment</h2>
+    <p>
+        Following our formal commercial discussion, this proposal confirms <strong>PAROT Corp's</strong> capability to deliver a carrier-grade, highly scalable Smart Waste and Fleet Management platform engineered specifically for <strong>NEXORA's</strong> regional commercial expansion across Egypt, the Kingdom of Saudi Arabia, and the GCC.
+    </p>
+    <p>
+        The platform has been demonstrated in full operation via the live interactive demo. It fulfills all 11 requirements requested by NEXORA, including <strong>protocol agnosticism (Dingtek DF703 and MQTT)</strong>, <strong>full multi-tenancy</strong>, <strong>white-label delivery under NEXORA's brand</strong>, <strong>complete source code handover</strong>, <strong>90-day post-handover warranty</strong>, and a <strong>revised 30% / 30% / 40% milestone payment structure</strong>.
+    </p>
+
+    <div class="callout">
+        <strong>Strategic Objective:</strong> Empower NEXORA to market, sublicense, and operate its own proprietary-branded Smart Waste platform across master-planned cities, residential developments, and municipalities without vendor lock-in or recurring per-tenant royalties.
+    </div>
+
+    <h2 class="section-header">2. Item-by-Item Compliance Matrix</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 25%;">Item & Requirement</th>
+                <th style="width: 15%;">Status</th>
+                <th>PAROT Technical & Commercial Commitment</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>1. Sensor Compatibility</strong><br>(Dingtek DF703 + MQTT)</td>
+                <td><span class="tag-ok">Confirmed</span></td>
+                <td>100% protocol and vendor agnostic. Supports Dingtek DF703 4G via TCP socket + MQTT v5.0 broker (EMQX) + LoRaWAN/HTTP via modular payload decoder plugins.</td>
+            </tr>
+            <tr>
+                <td><strong>2. System Scalability</strong><br>(200 to 10k Sensors)</td>
+                <td><span class="tag-ok">Detailed</span></td>
+                <td>Microservices containerized architecture (Kubernetes + Redis + TimescaleDB). Sub-second P99 latency (&lt;20ms) and zero packet loss at 10,000 active nodes.</td>
+            </tr>
+            <tr>
+                <td><strong>3. Multi-Tenancy</strong><br>(Clients & Projects)</td>
+                <td><span class="tag-ok">Confirmed</span></td>
+                <td>Native 4-tier hierarchy: Super Admin &rarr; Client Tenant &rarr; City Zone &rarr; Asset. Logical data isolation with tenant-scoped ORM and optional database-per-tenant.</td>
+            </tr>
+            <tr>
+                <td><strong>4. White-Label & Resell</strong><br>(NEXORA Brand)</td>
+                <td><span class="tag-ok">Confirmed</span></td>
+                <td>Custom domain mapping (`iot.nexora.com`), bespoke primary/accent color schemes, custom logos, Arabic/English localized UI, and unlimited resale rights.</td>
+            </tr>
+            <tr>
+                <td><strong>5. Source Code & IP</strong><br>(Full Handover)</td>
+                <td><span class="tag-ok">Confirmed</span></td>
+                <td>Full transfer of frontend (Angular/TS), backend (APIs), protocol parsers, database schemas/migrations, Docker/K8s manifests, and technical documentation.</td>
+            </tr>
+            <tr>
+                <td><strong>6. 90-Day Warranty</strong><br>(Post-Handover)</td>
+                <td><span class="tag-ok">Accepted</span></td>
+                <td>90-day comprehensive bug correction, defect remediation, and system stability warranty starting immediately after Phase 2 acceptance.</td>
+            </tr>
+            <tr>
+                <td><strong>7. 6-Month Support SLA</strong><br>(Response & Resolution)</td>
+                <td><span class="tag-ok">Agreed</span></td>
+                <td>Severity 1 (Critical): &lt;30m response / &lt;4h resolution, 24/7/365 coverage. Proactive cloud infrastructure monitoring, monthly reviews, and training.</td>
+            </tr>
+            <tr>
+                <td><strong>8. Cybersecurity & DR</strong><br>(NCA & NTRA Compliance)</td>
+                <td><span class="tag-ok">Compliant</span></td>
+                <td>RBAC, 2FA (TOTP), TLS 1.3 / AES-256 encryption, immutable audit trails. Automated Point-in-Time Recovery (RPO &lt;1h, RTO &lt;4h). Saudi cloud residency ready.</td>
+            </tr>
+            <tr>
+                <td><strong>9. Open API Integrations</strong><br>(ERP / CAFM / GIS)</td>
+                <td><span class="tag-ok">Documented</span></td>
+                <td>OpenAPI 3.0 REST endpoints + real-time outbound webhooks (`bin.alarm`, `bin.fill`, `route.completed`) for SAP, Maximo, Archibus, and Cityworks.</td>
+            </tr>
+            <tr>
+                <td><strong>10. Payment Terms</strong><br>(30% / 30% / 40%)</td>
+                <td><span class="tag-ok">Approved</span></td>
+                <td>Milestone schedule revised to: 30% Advance | 30% Phase 1 Acceptance | 40% Final Delivery & Phase 2 Testing.</td>
+            </tr>
+            <tr>
+                <td><strong>11. Acceptance Criteria</strong><br>(Phase 1 & Phase 2)</td>
+                <td><span class="tag-ok">Included</span></td>
+                <td>14 formal Acceptance Test Plan (ATP) scenarios covering end-to-end ingestion, white-labeling, route optimization, APIs, and stress testing.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 class="section-header">3. System Scalability & Tiered Commercial Pricing</h2>
+    <p>
+        The base offer accommodates 200 initial sensors. Below is the transparent pricing schedule for scaling to 1,000, 5,000, and 10,000 sensors:
+    </p>
+
+    <h3>Option A: Managed Cloud Software-as-a-Service (SaaS) Model</h3>
+    <p style="font-size: 10pt; color: #64748b;">
+        *Includes hosting on regional cloud, automated backups, OS/DB patches, 24/7 SLA monitoring, and software licensing.*
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Tier Level</th>
+                <th>Active Sensors</th>
+                <th>Monthly Fee (USD)</th>
+                <th>Annual Fee (USD)</th>
+                <th>Effective Unit Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Tier 1 (Base Pilot)</strong></td>
+                <td>Up to 200 Sensors</td>
+                <td>Included in Base</td>
+                <td>Included in Base</td>
+                <td>$2.50 / sensor / mo</td>
+            </tr>
+            <tr>
+                <td><strong>Tier 2 (District)</strong></td>
+                <td>Up to 1,000 Sensors</td>
+                <td><strong>$1,500 / mo</strong></td>
+                <td><strong>$15,000 / yr</strong></td>
+                <td><strong>$1.50</strong> (40% discount)</td>
+            </tr>
+            <tr>
+                <td><strong>Tier 3 (City-Wide)</strong></td>
+                <td>Up to 5,000 Sensors</td>
+                <td><strong>$4,500 / mo</strong></td>
+                <td><strong>$45,000 / yr</strong></td>
+                <td><strong>$0.90</strong> (64% discount)</td>
+            </tr>
+            <tr>
+                <td><strong>Tier 4 (Mega-City)</strong></td>
+                <td>Up to 10,000 Sensors</td>
+                <td><strong>$6,500 / mo</strong></td>
+                <td><strong>$65,000 / yr</strong></td>
+                <td><strong>$0.65</strong> (74% discount)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Option B: Self-Hosted Cloud Enterprise (NEXORA Cloud Account)</h3>
+    <p style="font-size: 10pt; color: #64748b;">
+        *When NEXORA hosts the platform inside its own AWS, Oracle Cloud (Riyadh), or STC Cloud account.*
+    </p>
+    <ul>
+        <li><strong>One-Time Enterprise License & Source Code Buyout:</strong> Structured under Milestone Payments (Item 10).</li>
+        <li><strong>Estimated Direct Cloud Infrastructure Costs:</strong>
+            <ul>
+                <li><strong>1,000 Sensors:</strong> ~$180 – $300 / month</li>
+                <li><strong>5,000 Sensors:</strong> ~$500 – $850 / month</li>
+                <li><strong>10,000 Sensors:</strong> ~$1,200 – $1,800 / month (High-Availability K8s Cluster)</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2 class="section-header">4. Milestone Payment Schedule (Approved)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%;">Milestone</th>
+                <th style="width: 45%;">Description & Deliverable</th>
+                <th style="width: 15%;">Share (%)</th>
+                <th style="width: 25%;">Trigger Event</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Milestone 1</strong></td>
+                <td><strong>Contract Execution & Project Mobilization</strong></td>
+                <td><strong>30%</strong></td>
+                <td>Signing of agreement & environment setup.</td>
+            </tr>
+            <tr>
+                <td><strong>Milestone 2</strong></td>
+                <td><strong>Phase 1 Delivery & Functional Acceptance</strong></td>
+                <td><strong>30%</strong></td>
+                <td>Sign-off on Phase 1 Acceptance Criteria (Ingestion, Map, White-Label).</td>
+            </tr>
+            <tr>
+                <td><strong>Milestone 3</strong></td>
+                <td><strong>Final Handover, Phase 2 Acceptance & IP Transfer</strong></td>
+                <td><strong>40%</strong></td>
+                <td>Sign-off on Phase 2 Acceptance, full Source Code & Documentation delivery.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 class="section-header">5. Acceptance Test Plan (ATP) Scenarios</h2>
+
+    <h3>Phase 1: Core Platform, Multi-Tenancy & Sensor Ingestion</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%;">Test ID</th>
+                <th style="width: 35%;">Test Scenario</th>
+                <th>Target Acceptance Criteria</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>ATP-1.1</strong></td>
+                <td>Multi-Tenant Data Isolation</td>
+                <td>Create two client tenants. Verify complete separation; Tenant A cannot query or view Tenant B data.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-1.2</strong></td>
+                <td>White-Label Theming</td>
+                <td>Apply custom logo, hex palette (`#059669`), title, and localized Arabic/English login carousel.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-1.3</strong></td>
+                <td>Dingtek DF703 4G Ingestion</td>
+                <td>Transmit live hex TCP socket packet (`0x80 ... 0x81`). Correctly decodes distance, fill %, temp, angle, battery.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-1.4</strong></td>
+                <td>MQTT Telemetry Integration</td>
+                <td>Publish JSON payload over MQTT broker (EMQX). Telemetry ingested and reflected in real-time asset state.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-1.5</strong></td>
+                <td>Geospatial Map Visualization</td>
+                <td>Render 200 pins color-coded by fill status (&lt;50% green, 50-79% yellow, &ge;80% red) with sub-second reload.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-1.6</strong></td>
+                <td>Critical Alarm Thresholds</td>
+                <td>Simulate tilt &gt;45° and heat &gt;65°C. System raises instantaneous fire/tilt alarm and notification.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Phase 2: Fleet Routing, APIs, Security & Final Handover</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%;">Test ID</th>
+                <th style="width: 35%;">Test Scenario</th>
+                <th>Target Acceptance Criteria</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>ATP-2.1</strong></td>
+                <td>AI Route Optimization</td>
+                <td>Select bins &gt;80% full. Algorithm computes shortest sequential path, estimated time, and fuel reduction stats.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-2.2</strong></td>
+                <td>Driver Mobile Completion</td>
+                <td>Driver marks stop as emptied on mobile interface. Live fill level resets to 5% with immediate map refresh.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-2.3</strong></td>
+                <td>OpenAPI & Webhooks</td>
+                <td>Invoke REST `/api/v1/devices`. Trigger outbound alarm webhook to test external mock ERP endpoint (&lt;3s latency).</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-2.4</strong></td>
+                <td>1,000+ Sensor Load Test</td>
+                <td>Simulate 1,000 concurrent sensor heartbeats. Ingestion P99 latency remains &lt;250ms with 0% packet loss.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-2.5</strong></td>
+                <td>Disaster Recovery Simulation</td>
+                <td>Execute automated DB snapshot restore. Verify zero data corruption and RPO &lt;1 hour.</td>
+            </tr>
+            <tr>
+                <td><strong>ATP-2.6</strong></td>
+                <td>Source Code & Documentation</td>
+                <td>Handover of Git repositories, schemas, Docker/K8s manifests, and API docs. Deploy in clean environment.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div style="margin-top: 50px; border-top: 2px solid #e2e8f0; padding-top: 20px; display: flex; justify-content: space-between;">
+        <div>
+            <strong>Authorized Signature (PAROT Corp):</strong><br><br>
+            _______________________________<br>
+            <strong>PAROT Commercial & Technical Lead</strong>
+        </div>
+        <div>
+            <strong>Acknowledged & Accepted (NEXORA):</strong><br><br>
+            _______________________________<br>
+            <strong>NEXORA Authorized Representative</strong>
+        </div>
+    </div>
+
+</body>
+</html>
