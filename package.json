@@ -1,0 +1,12 @@
+{
+  "name": "parot-wasteos-platform",
+  "version": "2.0.0",
+  "description": "PAROT WasteOS Smart Waste & IoT Fleet Management Platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
