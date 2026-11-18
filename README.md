@@ -1,49 +1,43 @@
 # PAROT WasteOS™ — Smart Waste & IoT Fleet Management Platform
 
-An enterprise IoT platform designed for smart waste monitoring, zero-pixelation vector mapping, AI-driven collection route planning, animated live driver simulation, and multi-tenant operations across Egypt, Saudi Arabia, and regional markets.
+Enterprise IoT platform built with **Node.js backend** and **zero-pixelation Vector GL GIS maps** for smart municipal waste management, Dingtek DF703 4G telemetry ingestion, AI route optimization, driver GPS compliance monitoring, and enterprise cloud/security governance.
 
 ---
 
-## Key Features
+## Key Capabilities
 
-- **Custom Brand Splash & Bilingual Auth Portal:** Animated self-drawing monoline smart-bin logo (`PAROT WasteOS`) with progress preloader, workspace switcher, Light & Dark modes, and instant English / Arabic (`RTL`) switching.
-- **Zero-Pixelation Vector Maps (up to Z20+):** GPU-accelerated MapLibre GL vector tiles (`OpenFreeMap Positron` light / `Carto Dark Matter Vector` dark) + Esri World Imagery & boundaries labels in Satellite mode, with custom smart-bin markers showing live fill (`%`), high-heat alerts, and tipped-over orientation.
-- **Plain-Language Explainers ("Why & What To Do"):** Every bin inspector card, safety notice, AI trip plan, and top Activity Story log clearly explains sensor triggers, route decisions, and recommended actions in simple non-technical language.
-- **AI Smart Routes & Return Policies:** Dynamic street routing between your configured **Starting Warehouse / Garage**, prioritized bins (fire heat, tipped, or fill threshold), and **Recycling / Unloading Hub** supporting 3 End-of-Route policies (`Recycling + Return`, `Return to Warehouse`, `End at Recycling`) with fuel & cost estimation.
-- **Live Animated Driver Simulation:** Real-time moving truck along the planned route with play/pause, `1x / 2x / 5x` speed controls, closed-street detour testing, and live movement narration (`Live Movement Story`).
-- **Admin Preferences Control Center:** Interactive mini-map to relocate Warehouse and Recycling coordinates by clicking, live sliders for Fire/Heat (`°C`), Pickup Fill (`%`), Tipped Angle (`°`), Low Battery (`%`) limits, and `localStorage` persistence.
-- **Dual Scheduling (AI Auto + Manual Custom):** Supports both an automated AI daily/safety scheduler with optimal time-slot suggestions and a custom manual schedule builder (name, time, frequency, target zone, assigned driver).
-- **Multi-Protocol IoT Ingestion & API Docs:** Sensor onboarding workflow, MQTT v5.0 / TCP Hex telemetry previews, and multi-tenant white-label customization studio.
+- **Dingtek DF703 4G Protocol V2.8 Ready:** Bit-accurate ASCII uplink decoder (`0x01` Abnormal Alert, `0x02` Heartbeat with/without IEEE-754 GPS, `0x03` Config Confirmation) + Downlink Command Builder (`80029999` + `01..0D` + `81`) + Domain & API Gateway ingestion (`ingest.parotcorp.com;5000;` -> `POST /api/df703/ingest`) with zero single-IP lock-in.
+- **Wheeled Container Markers & Clean Geospatial Spacing:** Interactive MapLibre GL Vector Maps (up to Z20+ zoom clarity) displaying well-spaced wheeled municipal bin pins with real-time fill %, fire heat, fall/tilt angle, and battery status.
+- **Driver Mobile GPS & Route Compliance Monitor:** Compares Planned AI Route vs Actual Driver track (`GET/POST /api/driver/gps`), flags off-route detours with wasted fuel calculation, and streams live trip narration.
+- **3-Month Operating Cost ROI & Excel CSV Export:** One-click 90-day CSV export (`GET /api/export/history.csv`) with UTF-8 BOM for Arabic/English Excel compatibility plus Labor, Fuel, and Fleet Maintenance ROI proof.
+- **Enterprise Cloud Costing, Cybersecurity, <1-Hour DR & SLA:** Interactive `Pay-As-You-Go` vs `Dedicated VM` estimator, dual-layer security model, `SHA-256` Disaster Recovery Snapshot/Restore (`GET /api/backup/snapshot`, `POST /api/backup/restore`), and formal P1–P4 SLA matrix.
+- **Bilingual UI (English / Arabic RTL) & Light/Dark Themes.**
+
+---
+
+## Backend API Endpoints (`server.js`)
+
+| Method | Endpoint | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Render health & TCP bridge status |
+| `GET` | `/api/status` | Platform telemetry counter & recent records |
+| `POST` | `/api/df703/ingest` | Parse & ingest DF703 V2.8 ASCII frames (`01`, `02`, `03`) |
+| `GET` | `/api/df703/packets` | List decoded DF703 frames & pending downlinks |
+| `POST` | `/api/df703/downlink` | Queue ASCII downlink command (`80029999...81`) |
+| `GET/POST` | `/api/driver/gps` | Track driver GPS compliance & route deviations |
+| `GET` | `/api/export/history.csv` | Download 90-day Excel-ready history CSV |
+| `GET/POST` | `/api/backup/snapshot`, `/restore` | Export or verify <1-hour Disaster Recovery snapshots |
 
 ---
 
 ## Quick Start
 
-No build step required. Serve locally with Python:
-
 ```bash
-# Clone the repository
 git clone https://github.com/SohibKhaled/parot-wasteos-platform.git
 cd parot-wasteos-platform
 
-# Start local server on port 3005
-python3 -m http.server 3005
-
-# Open in your browser
-open http://localhost:3005
-```
-
----
-
-## Repository Structure
-
-```text
-├── index.html                                        # Complete PAROT WasteOS Single-Page Application
-├── proposal.html                                     # Executive Technical & Commercial Proposal (HTML)
-├── starlink_proposal.html                            # Star Link Quotation #QT-000013 Proposal (HTML)
-├── PAROT_Commercial_Technical_Proposal_NEXORA.pdf    # 7-page Commercial & Technical Proposal PDF
-├── PAROT_StarLink_Proposal_QT000013.pdf              # Approved Star Link 3-page Proposal PDF
-└── README.md                                         # Project Documentation
+node server.js
+# Open http://127.0.0.1:3005/
 ```
 
 ---
