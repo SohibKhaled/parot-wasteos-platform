@@ -429,29 +429,96 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    // Live Driver Mobile GPS Compliance & Violation Tracking
+    // Live Driver Mobile GPS Compliance & Violation Tracking + Assigned Route Sync
     if (req.method === 'GET' && pathname === '/api/driver/gps') {
         return sendJson(res, 200, driverGpsState);
     }
     if (req.method === 'POST' && pathname === '/api/driver/gps') {
         try {
             const body = await readJsonBody(req);
+            if (typeof body.driverId === 'string') driverGpsState.driverId = body.driverId;
+            if (typeof body.driverName === 'string') driverGpsState.driverName = body.driverName;
+            if (typeof body.lat === 'number') driverGpsState.lat = body.lat;
+            if (typeof body.lng === 'number') driverGpsState.lng = body.lng;
+            if (typeof body.speedKmh === 'number') driverGpsState.speedKmh = body.speedKmh;
+            if (typeof body.screenState === 'string') driverGpsState.screenState = body.screenState;
             if (typeof body.plannedKm === 'number') driverGpsState.plannedKm = body.plannedKm;
             if (typeof body.actualKm === 'number') driverGpsState.actualKm = body.actualKm;
             if (typeof body.compliancePct === 'number') driverGpsState.compliancePct = body.compliancePct;
             if (typeof body.violationActive === 'boolean') driverGpsState.violationActive = body.violationActive;
             if (body.violationReason !== undefined) driverGpsState.violationReason = body.violationReason;
+            driverGpsState.lastPingAt = new Date().toISOString();
             const extraKm = Math.max(0, +(driverGpsState.actualKm - driverGpsState.plannedKm).toFixed(1));
             driverGpsState.wastedEgp = Math.round(extraKm * driverGpsState.costPerKmEgp);
             driverGpsState.history.unshift({
-                at: new Date().toISOString(),
+                at: driverGpsState.lastPingAt,
+                driverId: driverGpsState.driverId,
                 lat: body.lat ?? null,
                 lng: body.lng ?? null,
+                speedKmh: body.speedKmh ?? 0,
+                screenState: body.screenState || 'active',
                 compliancePct: driverGpsState.compliancePct,
                 violationActive: driverGpsState.violationActive
             });
-            if (driverGpsState.history.length > 50) driverGpsState.history.pop();
+            if (driverGpsState.history.length > 80) driverGpsState.history.pop();
             return sendJson(res, 200, { updated: true, state: driverGpsState });
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message });
+        }
+    }
+
+    if (req.method === 'GET' && pathname === '/api/driver/route') {
+        return sendJson(res, 200, { assignedRoute: driverGpsState.assignedRoute || null });
+    }
+    if (req.method === 'POST' && pathname === '/api/driver/route') {
+        try {
+            const body = await readJsonBody(req, 262144);
+            driverGpsState.assignedRoute = body;
+            driverGpsState.plannedKm = Number(body.plannedKm) || driverGpsState.plannedKm;
+            driverGpsState.actualKm = driverGpsState.plannedKm;
+            driverGpsState.compliancePct = 100;
+            driverGpsState.violationActive = false;
+            return sendJson(res, 200, { assigned: true, route: driverGpsState.assignedRoute });
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message });
+        }
+    }
+
+    // Full Platform Data Migration Export & Import (Move cleanly to any server/platform)
+    if (req.method === 'GET' && pathname === '/api/migration/export') {
+        const bundle = {
+            format: 'PAROT-FULL-MIGRATION-V1',
+            exportedAt: new Date().toISOString(),
+            platformVersion: '2.8.0',
+            telemetryLog,
+            df703Packets,
+            driverGpsState
+        };
+        bundle.sha256 = crypto.createHash('sha256').update(JSON.stringify(bundle)).digest('hex');
+        return sendJson(res, 200, bundle);
+    }
+
+    if (req.method === 'POST' && pathname === '/api/migration/import') {
+        try {
+            const body = await readJsonBody(req, 1048576);
+            if (!body || !String(body.format || '').startsWith('PAROT-')) {
+                return sendJson(res, 400, { error: 'Invalid migration bundle format' });
+            }
+            if (Array.isArray(body.df703Packets)) {
+                df703Packets.splice(0, df703Packets.length, ...body.df703Packets.slice(0, 200));
+            }
+            if (Array.isArray(body.telemetryLog)) {
+                telemetryLog.splice(0, telemetryLog.length, ...body.telemetryLog.slice(0, 200));
+            }
+            if (body.driverGpsState && typeof body.driverGpsState === 'object') {
+                Object.assign(driverGpsState, body.driverGpsState);
+            }
+            return sendJson(res, 200, {
+                migrated: true,
+                importedAt: new Date().toISOString(),
+                packetsCount: df703Packets.length,
+                telemetryCount: telemetryLog.length
+            });
         } catch (err) {
             return sendJson(res, 400, { error: err.message });
         }

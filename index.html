@@ -12,6 +12,8 @@
         } catch (e) {}
     </script>
     <title>PAROT WasteOS — Smart City Waste &amp; Fleet Platform</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#8B5CF6">
 
     <!-- Custom Designed PAROT WasteOS Monoline Geometric Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%238B5CF6'/%3E%3Cstop offset='52%25' stop-color='%23EC4899'/%3E%3Cstop offset='100%25' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='%23020617'/%3E%3Cpath d='M22 14a14 14 0 0 1 20 0M26 17.5a8 8 0 0 1 12 0' fill='none' stroke='%2306B6D4' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M16 23h32M26 23v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2M19 23l3.6 28a3 3 0 0 0 3 2.6h12.8a3 3 0 0 0 3-2.6L45 23' fill='none' stroke='url(%23g)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M27 38l5-5 5 5M32 33v14' fill='none' stroke='%23F8FAFC' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -817,7 +819,7 @@
                             <select id="loginRoleSelect" name="role" class="apple-input w-full px-3 py-2.5 text-xs font-semibold">
                                 <option value="Administrator" selected>Administrator</option>
                                 <option value="Operations Manager">Operations Manager</option>
-                                <option value="Route Supervisor">Route Supervisor</option>
+                                <option value="Driver">Driver (Mobile App GPS)</option>
                             </select>
                         </div>
                     </div>
@@ -863,6 +865,13 @@
                         <button type="button" onclick="quickLogin('nexora', 'Partner View', 'api@nexora.io')" class="soft-well p-2.5 text-start hover:opacity-90 transition flex items-center gap-2.5">
                             <span class="w-7 h-7 rounded-full bg-cyan-500/15 text-cyan-600 font-bold flex items-center justify-center shrink-0">NX</span>
                             <span class="truncate font-semibold text-main">NEXORA</span>
+                        </button>
+                        <button type="button" onclick="quickLogin('parot_hq', 'Driver', 'driver101@parot.io')" class="col-span-2 soft-well p-2.5 text-start hover:opacity-90 transition flex items-center justify-between gap-2.5 border border-[#EC4899]/30">
+                            <span class="flex items-center gap-2.5 min-w-0">
+                                <span class="w-7 h-7 rounded-full bg-[#EC4899]/15 text-[#EC4899] font-bold flex items-center justify-center shrink-0"><i class="fa-solid fa-truck text-[11px]"></i></span>
+                                <span class="truncate font-semibold text-main">Driver Mobile App Demo (Ahmed Mostafa #101)</span>
+                            </span>
+                            <span class="px-2 py-0.5 rounded-full bg-[#EC4899]/15 text-[#EC4899] text-[10px] font-bold shrink-0">GPS App</span>
                         </button>
                     </div>
                 </div>
@@ -1289,15 +1298,39 @@
                 <!-- 3. SMART BINS INVENTORY                                        -->
                 <!-- ============================================================== -->
                 <section id="tab-bins" class="tab-content hidden space-y-5">
-                    <div class="apple-card p-5 flex flex-wrap items-center justify-between gap-3">
-                        <div class="segmented-track">
-                            <button type="button" onclick="setBinsSubTab('inventory', this)" class="bins-sub-btn seg-pill is-active">All Bins</button>
-                            <button type="button" onclick="setBinsSubTab('health', this)" class="bins-sub-btn seg-pill">Battery &amp; Signal</button>
-                            <button type="button" onclick="setBinsSubTab('categories', this)" class="bins-sub-btn seg-pill">Bin Sizes &amp; Types</button>
+                    <div class="apple-card p-5 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="segmented-track">
+                                <button type="button" onclick="setBinsSubTab('inventory', this)" class="bins-sub-btn seg-pill is-active">All Bins</button>
+                                <button type="button" onclick="setBinsSubTab('health', this)" class="bins-sub-btn seg-pill">Battery &amp; Signal</button>
+                                <button type="button" onclick="setBinsSubTab('categories', this)" class="bins-sub-btn seg-pill">Bin Sizes &amp; Types</button>
+                            </div>
+                            <div class="flex items-center gap-2.5 flex-wrap">
+                                <input id="binsSearchInput" type="search" placeholder="Search bin or street..." oninput="renderBinsTable()" class="apple-input px-3.5 py-2 text-xs w-52">
+                                <button type="button" onclick="exportBinsCsv()" class="px-4 py-2 pill-btn-soft text-xs font-semibold"><i class="fa-solid fa-download me-1.5"></i>Download Spreadsheet</button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2.5">
-                            <input id="binsSearchInput" type="search" placeholder="Search bin or street..." oninput="renderBinsTable()" class="apple-input px-3.5 py-2 text-xs w-52">
-                            <button type="button" onclick="exportBinsCsv()" class="px-4 py-2 pill-btn-soft text-xs font-semibold"><i class="fa-solid fa-download me-1.5"></i>Download Spreadsheet</button>
+
+                        <!-- Header Telemetry Filters & Quick Sort -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-hair text-xs">
+                            <div class="flex flex-wrap items-center gap-1.5" id="binsHeaderFilterRow">
+                                <span class="text-[11px] font-bold text-dim me-1">Filter:</span>
+                                <button type="button" onclick="setBinsTableFilter('all', this)" class="bin-tbl-f seg-pill is-active !px-2.5 !py-1">All</button>
+                                <button type="button" onclick="setBinsTableFilter('fire', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-rose-500"><i class="fa-solid fa-fire me-1"></i>High Heat</button>
+                                <button type="button" onclick="setBinsTableFilter('tilt', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-[#A78BFA]"><i class="fa-solid fa-person-falling-burst me-1"></i>Tipped</button>
+                                <button type="button" onclick="setBinsTableFilter('full', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-amber-500">Full</button>
+                                <button type="button" onclick="setBinsTableFilter('lowbatt', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-amber-500"><i class="fa-solid fa-battery-quarter me-1"></i>Low Battery</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="binsSortSelect" class="text-[11px] font-bold text-dim">Sort by:</label>
+                                <select id="binsSortSelect" onchange="setBinsSort(this.value)" class="apple-input px-3 py-1.5 text-xs font-semibold">
+                                    <option value="fill:desc">Fill Level (High &rarr; Low)</option>
+                                    <option value="temp:desc">Temperature (Hot &rarr; Cool)</option>
+                                    <option value="battery:asc">Battery (Low &rarr; High)</option>
+                                    <option value="angle:desc">Tilt Angle (High &rarr; Low)</option>
+                                    <option value="rssi:desc">Signal Strength</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -1306,8 +1339,14 @@
                             <table class="clean-table">
                                 <thead>
                                     <tr>
-                                        <th>Bin &amp; Street</th><th>Type</th><th>Fill Level</th><th>Temp</th>
-                                        <th>Position</th><th>Connection</th><th>Battery</th><th>Last Update</th>
+                                        <th><button type="button" onclick="toggleColSort('name')" class="font-bold hover:text-main flex items-center gap-1">Bin &amp; Street <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th>Type</th>
+                                        <th><button type="button" onclick="toggleColSort('fill')" class="font-bold hover:text-main flex items-center gap-1">Fill Level <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th><button type="button" onclick="toggleColSort('temp')" class="font-bold hover:text-main flex items-center gap-1">Temp <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th><button type="button" onclick="toggleColSort('angle')" class="font-bold hover:text-main flex items-center gap-1">Position <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th><button type="button" onclick="toggleColSort('rssi')" class="font-bold hover:text-main flex items-center gap-1">Connection <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th><button type="button" onclick="toggleColSort('battery')" class="font-bold hover:text-main flex items-center gap-1">Battery <i class="fa-solid fa-sort text-[10px]"></i></button></th>
+                                        <th>Last Update</th>
                                     </tr>
                                 </thead>
                                 <tbody id="binsTableBody"></tbody>
@@ -1372,13 +1411,30 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label for="routeStrategySelect" class="block text-sub font-semibold mb-1.5">AI Priority Mode</label>
+                                        <label for="routeStrategySelect" class="block text-sub font-semibold mb-1.5">AI Priority Order</label>
                                         <select id="routeStrategySelect" class="apple-input w-full px-3 py-2 text-xs font-semibold">
-                                            <option value="balanced">Balanced (Safety + Fuel)</option>
-                                            <option value="alarm_first">Emergencies First</option>
-                                            <option value="tsp">Shortest Total Drive</option>
-                                            <option value="fill_desc">Fullest Bins First</option>
+                                            <option value="balanced">Balanced (AI Smart Priority)</option>
+                                            <option value="fire_first">High Heat / Fire First</option>
+                                            <option value="tilt_first">Tipped-Over Bins First</option>
+                                            <option value="alarm_first">All Safety Alerts First</option>
+                                            <option value="fill_desc">Fullest Bins First (%)</option>
+                                            <option value="tsp">Shortest Street Distance</option>
                                         </select>
+                                    </div>
+                                </div>
+
+                                <!-- Hybrid Route Studio: Pin Specific Bins #1, #2... + Let AI Complete -->
+                                <div class="soft-well p-3.5 space-y-2.5 text-xs">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-main flex items-center gap-1.5"><i class="fa-solid fa-thumbtack text-[#EC4899]"></i><span>Hybrid Route Studio (Pin Priority Stops)</span></span>
+                                        <button type="button" onclick="clearPinnedStops()" class="text-[11px] font-semibold text-dim hover:text-main">Clear Pins</button>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <select id="pinBinSelect" aria-label="Choose bin to pin first" class="apple-input flex-1 px-2.5 py-1.5 text-xs font-semibold"></select>
+                                        <button type="button" id="pinStopAddBtn" onclick="addPinnedStopFromSelect()" class="px-3 py-1.5 pill-btn-soft text-xs font-bold shrink-0">+ Pin Next Stop</button>
+                                    </div>
+                                    <div id="pinnedStopsTray" class="flex flex-wrap gap-1.5 min-h-[24px] items-center text-[11px] text-dim">
+                                        No manual pins yet — AI picks all stops automatically.
                                     </div>
                                 </div>
 
@@ -1722,6 +1778,18 @@
                         </div>
                     </div>
 
+                    <!-- $0 Free Hardware Testing Tunnel (Test Before Buying Any Server) -->
+                    <div class="apple-card p-5 border-s-4 border-s-emerald-500 flex flex-wrap items-center justify-between gap-4">
+                        <div class="space-y-1 max-w-3xl">
+                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[11px] font-bold">$0 Free Testing Mode • Before Buying Any VPS</span>
+                            <h3 class="font-display text-base font-bold text-main">Test Real DF703 Sensor Live on Your Laptop for Free</h3>
+                            <p class="text-xs text-sub leading-relaxed">
+                                Run a free TCP tunnel (<code class="text-emerald-500 font-bold">ssh -p 443 -R0:localhost:5000 tcp@a.pinggy.io</code> or <code>playit.gg</code>) to expose local port <code>5000</code> publicly. Point the sensor to the temporary Host &amp; Port — the dashboard auto-syncs live packets every 4 seconds!
+                            </p>
+                        </div>
+                        <span id="livePacketSyncBadge" class="px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-500 text-xs font-bold shrink-0">Auto-Sync Active (4s)</span>
+                    </div>
+
                     <!-- Live DF703 Hex Decoder + Downlink Config Builder -->
                     <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
                         <div class="xl:col-span-7 apple-card p-6 space-y-4">
@@ -2053,6 +2121,24 @@
                         </div>
                     </div>
 
+                    <!-- Full Platform Data Migration (Export / Import to Any Other Platform) -->
+                    <div class="apple-card p-6 flex flex-wrap items-center justify-between gap-4 border-s-4 border-s-[#8B5CF6]">
+                        <div class="space-y-1 max-w-2xl">
+                            <span class="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-[11px] font-bold">Zero Vendor Lock-In • Portable Schema</span>
+                            <h3 class="font-display text-base font-bold text-main">Full Platform Data Migration (Export &amp; Import)</h3>
+                            <p class="text-xs text-sub">Move 100% of your bins, telemetry history, driver GPS logs, schedules, and admin settings to any other platform or cloud server in one click.</p>
+                        </div>
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <button type="button" id="exportMigrationBtn" onclick="exportFullMigration()" class="px-4 py-2.5 pill-btn-primary text-xs font-bold flex items-center gap-1.5">
+                                <i class="fa-solid fa-box-archive"></i><span>Export Full Migration Bundle</span>
+                            </button>
+                            <label class="px-4 py-2.5 pill-btn-soft text-xs font-semibold cursor-pointer flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-import"></i><span>Import Migration File</span>
+                                <input id="importMigrationInput" type="file" accept=".json,application/json" onchange="importFullMigration(this)" class="sr-only">
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Formal SLA & Support Categories Matrix -->
                     <div class="apple-card overflow-hidden">
                         <div class="px-6 py-4 border-b border-hair flex flex-wrap items-center justify-between gap-2">
@@ -2296,14 +2382,26 @@
                 { v: 100, txt: 'Ready.' }
             ];
             for (const s of steps) {
-                await new Promise(r => setTimeout(r, 220));
+                await new Promise(r => setTimeout(r, 90));
                 if (bar) bar.value = s.v;
                 if (pctLbl) pctLbl.innerText = `${s.v}%`;
                 if (statusLbl) statusLbl.innerText = s.txt;
             }
-            await new Promise(r => setTimeout(r, 150));
+            await new Promise(r => setTimeout(r, 80));
             showOverlayWithFade(authGate);
             await hideOverlayWithFade(splash);
+        }
+
+        function applyRoleNavVisibility(role) {
+            const isDriver = role === 'Driver';
+            ['nav-alerts', 'nav-analytics', 'nav-integrations', 'nav-enterprise', 'nav-settings'].forEach(id => {
+                document.getElementById(id)?.classList.toggle('hidden', isDriver);
+            });
+            if (isDriver) {
+                switchTab('drivers');
+            } else {
+                switchTab('dashboard');
+            }
         }
 
         async function enterWorkspace(tenantId, role, email) {
@@ -2312,6 +2410,7 @@
             document.getElementById('activeUserEmailLbl').innerText = email;
             document.getElementById('activeUserRoleLbl').innerText = role;
             applyTenantTheme(tenantId);
+            applyRoleNavVisibility(role);
 
             const loader = document.getElementById('workspaceLoaderOverlay');
             document.getElementById('loaderHeadline').innerText = `Opening ${TENANTS[tenantId]?.title || 'Workspace'}...`;
@@ -2323,9 +2422,11 @@
             setTimeout(() => {
                 hideOverlayWithFade(loader);
                 if (map) { map.invalidateSize(); renderMapMarkers(activeFilter); }
-                logPlatformStory('Workspace Opened', `Signed in to ${TENANTS[tenantId].title} as ${role}. Loaded ${bins.length} DF703 bins with live ${settings.fireTemp}°C fire protection.`, 'success');
-                showToast(`Welcome to ${TENANTS[tenantId].title}`, 'success');
-            }, 340);
+                if (role === 'Driver') { initDriverMap(); }
+                const tenantTitle = TENANTS[tenantId]?.title || tenantId;
+                logPlatformStory('Workspace Opened', `Signed in to ${tenantTitle} as ${role}. Loaded ${bins.length} DF703 bins with live ${settings.fireTemp}°C fire protection.`, 'success');
+                showToast(role === 'Driver' ? 'Driver Mobile Mode Active — Ready for GPS & Route' : `Welcome to ${tenantTitle}`, 'success');
+            }, 180);
         }
 
         function quickLogin(t, r, email) { enterWorkspace(t, r, email); }
@@ -2899,10 +3000,56 @@
             if (view === 'categories') renderCategoriesView();
         }
 
+        let binsTableFilter = 'all';
+        let binsSortKey = 'fill';
+        let binsSortDir = 'desc';
+
+        function setBinsTableFilter(filter, btn) {
+            binsTableFilter = filter;
+            document.querySelectorAll('#binsHeaderFilterRow .filter-chip').forEach(b => b.classList.remove('is-active'));
+            if (btn) btn.classList.add('is-active');
+            renderBinsTable();
+        }
+
+        function setBinsSort(val) {
+            const [k, d] = (val || 'fill:desc').split(':');
+            binsSortKey = k || 'fill';
+            binsSortDir = d || 'desc';
+            renderBinsTable();
+        }
+
+        function toggleColSort(key) {
+            if (binsSortKey === key) {
+                binsSortDir = binsSortDir === 'desc' ? 'asc' : 'desc';
+            } else {
+                binsSortKey = key;
+                binsSortDir = key === 'name' ? 'asc' : 'desc';
+            }
+            const sel = document.getElementById('binsSortSelect');
+            if (sel) {
+                const candidate = `${binsSortKey}:${binsSortDir}`;
+                if ([...sel.options].some(o => o.value === candidate)) sel.value = candidate;
+            }
+            renderBinsTable();
+        }
+
         function renderBinsTable() {
             const q = (document.getElementById('binsSearchInput')?.value || '').toLowerCase();
-            const list = getScopedBins().filter(b => !q || b.code.toLowerCase().includes(q) || b.street.toLowerCase().includes(q)).slice(0, 60);
-            document.getElementById('binsTableBody').innerHTML = list.map(b => {
+            let list = getScopedBins().filter(b => !q || b.code.toLowerCase().includes(q) || b.street.toLowerCase().includes(q) || b.name.toLowerCase().includes(q));
+            if (binsTableFilter === 'fire') list = list.filter(isBinFire);
+            else if (binsTableFilter === 'tilt') list = list.filter(isBinTilted);
+            else if (binsTableFilter === 'full') list = list.filter(isBinFull);
+            else if (binsTableFilter === 'battery') list = list.filter(isBinLowBatt);
+
+            const dir = binsSortDir === 'asc' ? 1 : -1;
+            list.sort((a, b) => {
+                if (binsSortKey === 'name') return a.name.localeCompare(b.name) * dir;
+                const va = Number(a[binsSortKey] ?? 0);
+                const vb = Number(b[binsSortKey] ?? 0);
+                return (va - vb) * dir;
+            });
+
+            document.getElementById('binsTableBody').innerHTML = list.slice(0, 60).map(b => {
                 const sig = signalQualityLabel(b.rssi);
                 const pos = isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tipped Over</span>' : 'Upright';
                 return `<tr>
@@ -2915,7 +3062,7 @@
                     <td>${b.battery}%</td>
                     <td class="text-dim">${b.lastSeen} min ago</td>
                 </tr>`;
-            }).join('');
+            }).join('') || '<tr><td colspan="8" class="text-center text-dim py-6">No smart bins match this filter.</td></tr>';
         }
 
         function renderHealthTable() {
@@ -2959,31 +3106,95 @@
             return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
         }
 
+        let pinnedStopIds = [];
+
+        function populatePinBinSelect() {
+            const sel = document.getElementById('pinBinSelect');
+            if (!sel) return;
+            const zone = document.getElementById('routeZoneSelect')?.value;
+            const scoped = getScopedBins().filter(b => !zone || b.zone === zone);
+            sel.innerHTML = '<option value="">+ Pin specific bin (#1, #2...)</option>' +
+                scoped.map(b => `<option value="${b.id}">${b.code} — ${b.street} (${b.fill}%${isBinFire(b) ? ', HEAT' : isBinTilted(b) ? ', TIPPED' : ''})</option>`).join('');
+            renderPinnedStopsTray();
+        }
+
+        function addPinnedStopFromSelect() {
+            const sel = document.getElementById('pinBinSelect');
+            const id = sel?.value;
+            if (!id) return;
+            if (!pinnedStopIds.some(x => String(x) === String(id))) {
+                pinnedStopIds.push(String(id));
+                renderPinnedStopsTray();
+                showToast(`Pinned #${pinnedStopIds.length} priority stop`, 'success');
+            }
+            sel.value = '';
+        }
+
+        function removePinnedStop(id) {
+            pinnedStopIds = pinnedStopIds.filter(x => String(x) !== String(id));
+            renderPinnedStopsTray();
+        }
+
+        function clearPinnedStops() {
+            pinnedStopIds = [];
+            renderPinnedStopsTray();
+        }
+
+        function renderPinnedStopsTray() {
+            const tray = document.getElementById('pinnedStopsTray');
+            if (!tray) return;
+            if (!pinnedStopIds.length) {
+                tray.innerHTML = '<span class="text-[11px] text-dim">No bins pinned yet — AI picks all stops by selected priority.</span>';
+                return;
+            }
+            tray.innerHTML = pinnedStopIds.map((id, idx) => {
+                const b = bins.find(x => String(x.id) === String(id));
+                if (!b) return '';
+                return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#8B5CF6]/15 text-[#A78BFA] border border-[#8B5CF6]/30">#${idx + 1} ${b.code} <button type="button" onclick="removePinnedStop('${id}')" class="hover:text-rose-400 font-black ml-0.5">&times;</button></span>`;
+            }).join('');
+        }
+
         function orderStopsSmartAI(cands, startPt, strat, max) {
-            let pool = [...cands];
-            if (strat === 'alarm_first' || strat === 'balanced') {
+            const zone = document.getElementById('routeZoneSelect')?.value;
+            const pinnedBins = pinnedStopIds
+                .map(id => bins.find(b => String(b.id) === String(id) && (!zone || b.zone === zone)))
+                .filter(Boolean)
+                .slice(0, max);
+            const pinnedSet = new Set(pinnedBins.map(b => String(b.id)));
+
+            let pool = cands.filter(b => !pinnedSet.has(String(b.id)));
+            if (strat === 'fire_first') {
+                pool.sort((a, b) => (isBinFire(b) ? 10 : 0) - (isBinFire(a) ? 10 : 0) || (isBinTilted(b) ? 3 : 0) - (isBinTilted(a) ? 3 : 0) || b.temp - a.temp || b.fill - a.fill);
+            } else if (strat === 'tilt_first') {
+                pool.sort((a, b) => (isBinTilted(b) ? 10 : 0) - (isBinTilted(a) ? 10 : 0) || (isBinFire(b) ? 3 : 0) - (isBinFire(a) ? 3 : 0) || b.fill - a.fill);
+            } else if (strat === 'alarm_first' || strat === 'balanced') {
                 pool.sort((a, b) => ((isBinFire(b) ? 3 : 0) + (isBinTilted(b) ? 2 : 0)) - ((isBinFire(a) ? 3 : 0) + (isBinTilted(a) ? 2 : 0)) || b.fill - a.fill);
             } else if (strat === 'fill_desc') {
                 pool.sort((a, b) => b.fill - a.fill);
             }
-            const picked = pool.slice(0, max);
-            if (strat === 'fill_desc') return picked;
 
-            const ordered = [];
-            let cur = [startPt[0], startPt[1]];
+            const remainingSlots = Math.max(0, max - pinnedBins.length);
+            const picked = pool.slice(0, remainingSlots);
+            if (strat === 'fill_desc') return [...pinnedBins, ...picked];
+
+            const orderedRest = [];
+            let cur = pinnedBins.length ? [pinnedBins[pinnedBins.length - 1].lat, pinnedBins[pinnedBins.length - 1].lng] : [startPt[0], startPt[1]];
             const rem = [...picked];
             while (rem.length) {
                 let bestIdx = 0, bestScore = Infinity;
                 rem.forEach((b, idx) => {
                     const dist = haversineKm(cur, [b.lat, b.lng]);
-                    const urgencyDiscount = (strat === 'alarm_first' && (isBinFire(b) || isBinTilted(b))) ? 0.2 : 1;
+                    const urgencyDiscount =
+                        (strat === 'fire_first' && isBinFire(b)) ? 0.12 :
+                        (strat === 'tilt_first' && isBinTilted(b)) ? 0.12 :
+                        (strat === 'alarm_first' && (isBinFire(b) || isBinTilted(b))) ? 0.2 : 1;
                     if (dist * urgencyDiscount < bestScore) { bestScore = dist * urgencyDiscount; bestIdx = idx; }
                 });
                 const next = rem.splice(bestIdx, 1)[0];
-                ordered.push(next);
+                orderedRest.push(next);
                 cur = [next.lat, next.lng];
             }
-            return ordered;
+            return [...pinnedBins, ...orderedRest];
         }
 
         function recalcRouteEconomicsOnly() {
@@ -3090,8 +3301,9 @@
             routeMap.fitBounds(routeOverlay.getBounds(), { padding: [36, 36] });
 
             const urgCount = activeRouteStops.filter(s => isBinFire(s) || isBinTilted(s)).length;
-            const stratText = strat === 'alarm_first' ? 'Emergency Safety Warnings First' : strat === 'tsp' ? 'Shortest Street Loop' : strat === 'fill_desc' ? 'Fullest Bins First' : 'Balanced Safety & Fuel Savings';
-            const summaryStr = `Started at "${cfg.depot[2]}", picked ${activeRouteStops.length} bins via "${stratText}" (${urgCount} urgent alerts + >= ${thr}% full), sequenced road-by-road with no U-turns, ${settings.routeEndPolicy === 'round_trip' ? `then unloaded at ${cfg.landfill[2]} before returning to ${cfg.depot[2]}` : settings.routeEndPolicy === 'warehouse_only' ? `and returned directly back to ${cfg.depot[2]}` : `and finished shift at ${cfg.landfill[2]}`}.`;
+            const stratText = strat === 'fire_first' ? 'Burning / High-Heat Bins First' : strat === 'tilt_first' ? 'Tipped / Fallen Bins First' : strat === 'alarm_first' ? 'Emergency Safety Warnings First' : strat === 'tsp' ? 'Shortest Street Loop' : strat === 'fill_desc' ? 'Fullest Bins First' : 'Balanced Safety & Fuel Savings';
+            const pinNote = pinnedStopIds.length ? ` (${pinnedStopIds.length} manually pinned first)` : '';
+            const summaryStr = `Started at "${cfg.depot[2]}", picked ${activeRouteStops.length} bins via "${stratText}"${pinNote} (${urgCount} urgent alerts + >= ${thr}% full), sequenced road-by-road with no U-turns, ${settings.routeEndPolicy === 'round_trip' ? `then unloaded at ${cfg.landfill[2]} before returning to ${cfg.depot[2]}` : settings.routeEndPolicy === 'warehouse_only' ? `and returned directly back to ${cfg.depot[2]}` : `and finished shift at ${cfg.landfill[2]}`}.`;
             document.getElementById('aiReasoningSummary').innerText = summaryStr;
 
             document.getElementById('rtStopsVal').innerText = activeRouteStops.length;
@@ -3118,7 +3330,20 @@
             showToast(`Trip planned: ${lastRouteDistKm} km`, 'success');
         }
 
-        function sendRouteToDriver() {
+        async function sendRouteToDriver() {
+            try {
+                await fetch('/api/driver/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        driverId: activeDriver?.id || '101',
+                        zone: document.getElementById('routeZoneSelect')?.value || 'new_cairo',
+                        strategy: document.getElementById('routeStrategySelect')?.value || 'balanced',
+                        stops: activeRouteStops.map((s, idx) => ({ order: idx + 1, id: s.id, code: s.code, name: s.name, lat: s.lat, lng: s.lng, fill: s.fill, temp: s.temp, tilted: isBinTilted(s) })),
+                        coords: activeRouteCoords
+                    })
+                });
+            } catch (e) {}
             switchTab('drivers');
             setTimeout(() => { resetSimDrive(); if (!simTimer) toggleSimDrive(); }, 220);
         }
@@ -3372,11 +3597,178 @@
             showToast('Off-Route Violation Flagged (+3.8 km)', 'error');
         }
 
-        function toggleRealPhoneGps() {
+        let gpsWatchId = null;
+        let driverWakeLock = null;
+        let liveDriverMarker = null;
+
+        async function flushGpsQueue() {
+            const raw = localStorage.getItem('parot_gps_queue');
+            if (!raw) return;
+            try {
+                const queue = JSON.parse(raw);
+                if (!Array.isArray(queue) || !queue.length) return;
+                const latest = queue[queue.length - 1];
+                const res = await fetch('/api/driver/gps', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(latest)
+                });
+                if (res.ok) localStorage.removeItem('parot_gps_queue');
+            } catch (e) {}
+        }
+
+        async function requestScreenWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            try {
+                driverWakeLock = await navigator.wakeLock.request('screen');
+            } catch (e) {}
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                flushGpsQueue();
+                if (gpsWatchId !== null) requestScreenWakeLock();
+            }
+        });
+
+        async function toggleRealPhoneGps() {
             const btn = document.getElementById('livePhoneGpsBtn');
-            appendDriverStory(`Connected to ${activeDriver.name} Companion Mobile App GPS stream (5s ping). Operating cost monitor locked onto live coordinates.`, 'done');
+            if (gpsWatchId !== null) {
+                navigator.geolocation?.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+                if (driverWakeLock) { try { await driverWakeLock.release(); } catch (e) {} driverWakeLock = null; }
+                btn?.classList.remove('ring-2', 'ring-[#06B6D4]');
+                appendDriverStory(`Stopped ${activeDriver.name} live phone GPS stream.`, 'info');
+                showToast('Live phone GPS stopped', 'info');
+                return;
+            }
+
+            if (!('geolocation' in navigator)) {
+                appendDriverStory(`Browser geolocation unavailable; using simulated telemetry for ${activeDriver.name}.`, 'warn');
+                btn?.classList.add('ring-2', 'ring-[#06B6D4]');
+                showToast('Driver Companion GPS stream synchronized (simulated)', 'success');
+                return;
+            }
+
+            await requestScreenWakeLock();
             btn?.classList.add('ring-2', 'ring-[#06B6D4]');
-            showToast('Driver Companion GPS stream synchronized', 'success');
+            appendDriverStory(`Streaming real GPS from ${activeDriver.name}'s device (WakeLock + offline queue active).`, 'done');
+            showToast('Live GPS Streaming Started', 'success');
+
+            gpsWatchId = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    const payload = {
+                        driverId: activeDriver?.id || '101',
+                        driverName: activeDriver?.name || 'Ahmed Mostafa #101',
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        speedKmh: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0,
+                        screenState: document.visibilityState,
+                        lastPingAt: new Date().toISOString()
+                    };
+                    if (drvMap) {
+                        if (!liveDriverMarker) {
+                            liveDriverMarker = L.circleMarker([payload.lat, payload.lng], { radius: 8, color: '#06B6D4', fillColor: '#06B6D4', fillOpacity: 0.9 }).addTo(drvMap);
+                        } else {
+                            liveDriverMarker.setLatLng([payload.lat, payload.lng]);
+                        }
+                    }
+                    try {
+                        const r = await fetch('/api/driver/gps', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        await flushGpsQueue();
+                    } catch (e) {
+                        const q = JSON.parse(localStorage.getItem('parot_gps_queue') || '[]');
+                        q.push(payload);
+                        localStorage.setItem('parot_gps_queue', JSON.stringify(q.slice(-50)));
+                    }
+                },
+                (err) => {
+                    appendDriverStory(`GPS sensor notice: ${err.message}. Retaining route monitor fallback.`, 'warn');
+                },
+                { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+            );
+        }
+
+        async function exportFullMigration() {
+            try {
+                const res = await fetch('/api/migration/export');
+                const serverBundle = res.ok ? await res.json() : {};
+                const fullBundle = {
+                    ...serverBundle,
+                    exportedAt: new Date().toISOString(),
+                    clientState: { currentTenant, settings, schedules, pinnedStopIds, binsCount: bins.length }
+                };
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([JSON.stringify(fullBundle, null, 2)], { type: 'application/json' }));
+                a.download = `parot-wasteos-migration-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                logPlatformStory('Full Platform Migration Exported', `Exported complete tenant, rules, schedules, and device bundle (${bins.length} bins).`, 'success');
+                showToast('Exported Full Migration Bundle (.json)', 'success');
+            } catch (e) {
+                showToast('Migration export failed: ' + e.message, 'error');
+            }
+        }
+
+        async function importFullMigration(input) {
+            const file = input?.files?.[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const bundle = JSON.parse(text);
+                const res = await fetch('/api/migration/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bundle)
+                });
+                if (!res.ok) throw new Error('Server rejected bundle');
+                if (bundle.clientState?.settings) {
+                    Object.assign(settings, bundle.clientState.settings);
+                }
+                if (Array.isArray(bundle.clientState?.schedules)) {
+                    schedules = bundle.clientState.schedules;
+                    renderSchedules();
+                }
+                if (Array.isArray(bundle.clientState?.pinnedStopIds)) {
+                    pinnedStopIds = bundle.clientState.pinnedStopIds;
+                    renderPinnedStopsTray();
+                }
+                refreshMetricsAndLists();
+                logPlatformStory('Platform Migration Imported', `Restored configuration & telemetry state from ${file.name}.`, 'success');
+                showToast('Platform migration restored cleanly', 'success');
+            } catch (e) {
+                showToast('Invalid migration bundle: ' + e.message, 'error');
+            } finally {
+                input.value = '';
+            }
+        }
+
+        async function pollLiveBackendSync() {
+            const badge = document.getElementById('livePacketSyncBadge');
+            try {
+                const res = await fetch('/api/df703/packets');
+                if (!res.ok) return;
+                const data = await res.json();
+                const pkts = Array.isArray(data.packets) ? data.packets : [];
+                if (badge) badge.innerText = `Auto-Sync Active (${pkts.length} live packets)`;
+                pkts.slice(0, 10).forEach(p => {
+                    const target = bins.find(b => b.imei === p.imei || b.code === p.imei);
+                    if (target && p.parsed) {
+                        if (typeof p.parsed.fillPct === 'number') target.fill = p.parsed.fillPct;
+                        if (typeof p.parsed.temperatureC === 'number') target.temp = p.parsed.temperatureC;
+                        if (typeof p.parsed.batteryPct === 'number') target.battery = p.parsed.batteryPct;
+                        if (typeof p.parsed.tiltAngleDeg === 'number') target.angle = p.parsed.tiltAngleDeg;
+                        target.lastSeen = 0;
+                    }
+                });
+                if (pkts.length) refreshMetricsAndLists();
+            } catch (e) {
+                if (badge) badge.innerText = 'Auto-Sync Reconnecting...';
+            }
         }
 
         function setSimSpeed(spd, btn) {
@@ -3957,6 +4349,15 @@
             renderSchedules();
             renderPendingDevices();
             testApiEndpoint('bins');
+            populatePinBinSelect();
+            document.getElementById('routeZoneSelect')?.addEventListener('change', populatePinBinSelect);
+            document.getElementById('loginRoleSelect')?.addEventListener('change', (e) => {
+                if (e.target.value === 'Driver') {
+                    document.getElementById('loginEmail').value = 'ahmed.driver@parot-waste.io';
+                } else {
+                    syncLoginTenantEmail(document.getElementById('loginTenantSelect')?.value || 'new_cairo');
+                }
+            });
             document.getElementById('df703DecodedPreview').innerText = JSON.stringify(clientParseDf703Fallback(DF703_PDF_SAMPLES.ex2), null, 2);
             updateDownlinkPreview();
             recalcCloudCost();
@@ -4033,6 +4434,13 @@
             }
 
             runBootSplashSequence();
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            }
+
+            pollLiveBackendSync();
+            setInterval(pollLiveBackendSync, 4000);
 
             setInterval(() => {
                 const r = bins[Math.floor(Math.random() * bins.length)];
