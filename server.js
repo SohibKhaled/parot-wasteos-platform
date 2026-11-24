@@ -44,6 +44,29 @@ const driverGpsState = {
 
 let tcpServerActive = false;
 
+// ---------------------------------------------------------------------------
+// DF703 live-device settings (all optional, via environment variables)
+//   DF703_TCP_PORT      raw TCP port the sensor connects to (default 5000)
+//   DF703_SOCKET_IDLE_S close idle sensor sockets after N seconds (default 120)
+//   DATA_DIR            folder for persisted packets (default ./data)
+//   INGEST_TOKEN        if set, POST /api/df703/ingest and /downlink require
+//                       "Authorization: Bearer <INGEST_TOKEN>"
+// ---------------------------------------------------------------------------
+const SOCKET_IDLE_MS = (Number(process.env.DF703_SOCKET_IDLE_S) || 120) * 1000;
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, 'data');
+const PACKETS_FILE = path.join(DATA_DIR, 'df703_packets.jsonl');
+const INGEST_TOKEN = process.env.INGEST_TOKEN || '';
+const MAX_STREAM_BUFFER = 4096;
+
+let packetSeq = 0;
+const deviceState = new Map();   // imei -> latest decoded state
+const liveSockets = new Map();   // imei -> currently connected net.Socket
+const tcpStats = { connections: 0, activeConnections: 0, framesDecoded: 0, framesRejected: 0, lastFrameAt: null };
+
+function logDf703(...args) {
+    console.log(`[DF703 ${new Date().toISOString()}]`, ...args);
+}
+
 /**
  * Convert an 8-hex-character little-endian IEEE-754 float (e.g. CD03E942) to number.
  */
@@ -74,6 +97,10 @@ function parseDf703Packet(rawInput) {
 
     if (deviceType !== '01') {
         throw new Error(`Unsupported device type ${deviceType}; expected 01 (DF703)`);
+    }
+
+    if ((reportType === '01' || reportType === '02') && !/^[0-9A-Fa-f]+$/.test(cleaned)) {
+        throw new Error(`DF703 ${reportType} packet contains non-hex characters`);
     }
 
     if (reportType === '01' || reportType === '02') {
@@ -300,31 +327,207 @@ function readJsonBody(req, maxBytes = 131072) {
     });
 }
 
-function recordParsedDf703(parsed, sourceChannel) {
-    const entry = {
-        id: df703Packets.length + 1,
-        receivedAt: new Date().toISOString(),
-        channel: sourceChannel,
-        ...parsed
+/**
+ * Field names the dashboard (index.html -> pollLiveBackendSync) reads from `packet.parsed`.
+ */
+function buildDashboardView(parsed) {
+    if (parsed.reportType === '03') {
+        return { reportType: '03', fwVersion: parsed.fwVersion, uploadIntervalHours: parsed.uploadIntervalHours };
+    }
+    return {
+        reportType: parsed.reportType,
+        fillPct: parsed.fillPct,
+        heightMm: parsed.heightMm,
+        temperatureC: parsed.tempC,
+        tiltAngleDeg: parsed.fallAngleDeg,
+        batteryPct: parsed.batteryPct,
+        voltageV: parsed.voltageV,
+        rsrp: parsed.rsrp,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        alarms: parsed.alarms
     };
+}
+
+function updateDeviceState(entry) {
+    const prev = deviceState.get(entry.imei) || { imei: entry.imei, firstSeenAt: entry.receivedAt, packets: 0 };
+    const next = { ...prev, lastSeenAt: entry.receivedAt, lastChannel: entry.channel, packets: prev.packets + 1, lastReportType: entry.reportType };
+    if (entry.reportType === '03') {
+        next.config = {
+            fwVersion: entry.fwVersion, imsi: entry.imsi, uploadIntervalHours: entry.uploadIntervalHours,
+            detectTimeMin: entry.detectTimeMin, heightThresholdCm: entry.heightThresholdCm,
+            tempThresholdC: entry.tempThresholdC, angleThresholdDeg: entry.angleThresholdDeg,
+            fallEnabled: entry.fallEnabled, workMode: entry.workMode, serverAddress: entry.serverAddress,
+            confirmedAt: entry.receivedAt
+        };
+    } else {
+        next.telemetry = { ...entry.parsed, frameCount: entry.frameCount, deviceTimeIso: entry.timestampIso, at: entry.receivedAt };
+    }
+    deviceState.set(entry.imei, next);
+}
+
+function persistEntry(entry) {
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.appendFileSync(PACKETS_FILE, JSON.stringify(entry) + '\n');
+    } catch (err) {
+        logDf703('WARN could not persist packet:', err.message);
+    }
+}
+
+function addEntryToMemory(entry) {
     df703Packets.unshift(entry);
     if (df703Packets.length > 200) df703Packets.pop();
 
     telemetryLog.unshift({
         receivedAt: entry.receivedAt,
-        deviceId: parsed.imei,
-        fill: parsed.fillPct ?? null,
-        temp: parsed.tempC ?? parsed.tempThresholdC ?? null,
-        angle: parsed.fallAngleDeg ?? parsed.angleThresholdDeg ?? null,
-        battery: parsed.batteryPct ?? null
+        deviceId: entry.imei,
+        fill: entry.fillPct ?? null,
+        temp: entry.tempC ?? entry.tempThresholdC ?? null,
+        angle: entry.fallAngleDeg ?? entry.angleThresholdDeg ?? null,
+        battery: entry.batteryPct ?? null
     });
     if (telemetryLog.length > 200) telemetryLog.pop();
+
+    updateDeviceState(entry);
+}
+
+/**
+ * Reload previously received packets so a restart does not wipe live sensor data.
+ */
+function loadPersistedPackets() {
+    try {
+        if (!fs.existsSync(PACKETS_FILE)) return;
+        const lines = fs.readFileSync(PACKETS_FILE, 'utf8').split('\n').filter(Boolean);
+        for (const line of lines.slice(-500)) {
+            try {
+                const entry = JSON.parse(line);
+                packetSeq = Math.max(packetSeq, Number(entry.id) || 0);
+                addEntryToMemory(entry);
+            } catch { /* skip corrupt line */ }
+        }
+        logDf703(`Restored ${df703Packets.length} packets for ${deviceState.size} device(s) from ${PACKETS_FILE}`);
+    } catch (err) {
+        logDf703('WARN could not load persisted packets:', err.message);
+    }
+}
+
+function recordParsedDf703(parsed, sourceChannel, meta = {}) {
+    const expectedChars = (parsed.packetSizeBytes || 0) * 2;
+    const entry = {
+        id: ++packetSeq,
+        receivedAt: new Date().toISOString(),
+        channel: sourceChannel,
+        remoteAddress: meta.remoteAddress || null,
+        packetSizeOk: parsed.reportType === '03' ? null : parsed.rawPacket.length === expectedChars,
+        ...parsed,
+        parsed: buildDashboardView(parsed)
+    };
+    addEntryToMemory(entry);
+    persistEntry(entry);
 
     const queued = downlinkQueue.get(parsed.imei) || [];
     const pendingDownlink = queued.length ? queued.shift() : null;
     if (queued.length === 0) downlinkQueue.delete(parsed.imei);
 
     return { entry, pendingDownlink };
+}
+
+/**
+ * TCP is a byte stream: one sensor packet can arrive split over several chunks,
+ * or several packets in one chunk. This framer buffers the stream and cuts out
+ * complete DF703 frames.
+ *
+ * ASCII mode (protocol V2.8 default): the frame is hex text, e.g. "8000010122...81".
+ *   - type 01/02: fixed length, 68 chars (no GPS) or 84 chars (with GPS)
+ *   - type 03:    variable length; ends with "IP;PORT;" + 16-digit device ID + "81"
+ * Binary mode (fallback, if a firmware sends raw bytes): first byte is 0x80, frame length = size byte.
+ */
+const TYPE03_RE = /^80[0-9A-F]{2}0103[0-9A-F]{2}[0-9A-F]{38}[^;]{1,50};[^;]{1,10};[0-9A-F]{16}81/i;
+const HEADER_RE = /80[0-9A-F]{2}010[123]/i;
+
+function createDf703Framer() {
+    let buffer = '';
+    let binaryMode = null;
+
+    return function push(chunk) {
+        const frames = [];
+        const junk = [];
+
+        if (binaryMode === null) binaryMode = chunk.length > 0 && chunk[0] === 0x80;
+        buffer += binaryMode ? chunk.toString('hex').toUpperCase() : chunk.toString('latin1').replace(/\s+/g, '');
+
+        for (;;) {
+            const m = buffer.match(HEADER_RE);
+            if (!m) {
+                // keep a possible partial header at the end, drop the rest
+                const keep = buffer.slice(-9);
+                if (buffer.length > keep.length) junk.push(buffer.slice(0, buffer.length - keep.length));
+                buffer = keep;
+                break;
+            }
+            if (m.index > 0) {
+                junk.push(buffer.slice(0, m.index));
+                buffer = buffer.slice(m.index);
+            }
+            if (buffer.length < 16) break;
+
+            const type = buffer.slice(6, 8);
+            let frameLen = 0;
+
+            if (binaryMode) {
+                frameLen = parseInt(buffer.slice(8, 10), 16) * 2;
+            } else if (type === '01' || type === '02') {
+                frameLen = buffer.slice(14, 16) === '01' ? 84 : 68;
+            } else {
+                const t3 = buffer.match(TYPE03_RE);
+                if (t3) frameLen = t3[0].length;
+                else if (buffer.length < 220) break; // wait for more data
+            }
+
+            if (frameLen && buffer.length < frameLen) break; // wait for more data
+            const candidate = frameLen ? buffer.slice(0, frameLen) : '';
+            if (!candidate || !candidate.toUpperCase().endsWith('81')) {
+                junk.push(buffer.slice(0, 2));
+                buffer = buffer.slice(2); // resync on next header
+                continue;
+            }
+            frames.push(binaryMode && type === '03' ? binaryType03ToAscii(candidate) : candidate);
+            buffer = buffer.slice(frameLen);
+        }
+
+        if (buffer.length > MAX_STREAM_BUFFER) {
+            junk.push(buffer);
+            buffer = '';
+        }
+        return { frames, junk: junk.filter(Boolean) };
+    };
+}
+
+/** In binary mode the 0x03 server address is raw ASCII bytes; turn it back into text. */
+function binaryType03ToAscii(hexFrame) {
+    const fixed = hexFrame.slice(0, 48);
+    const tail = hexFrame.slice(hexFrame.length - 18);
+    const addrHex = hexFrame.slice(48, hexFrame.length - 18);
+    return fixed + Buffer.from(addrHex, 'hex').toString('latin1') + tail;
+}
+
+function isAuthorized(req) {
+    if (!INGEST_TOKEN) return true;
+    return (req.headers.authorization || '') === `Bearer ${INGEST_TOKEN}`;
+}
+
+/** Try to push a queued downlink straight away if the sensor is connected right now. */
+function tryDeliverNow(imei) {
+    const sock = liveSockets.get(imei);
+    const queued = downlinkQueue.get(imei);
+    if (!sock || sock.destroyed || !queued || !queued.length) return null;
+    const item = queued.shift();
+    if (!queued.length) downlinkQueue.delete(imei);
+    sock.write(item.frame);
+    item.sentAt = new Date().toISOString();
+    logDf703(`Downlink sent live to ${imei}: ${item.frame}`);
+    return item;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -343,6 +546,9 @@ const server = http.createServer(async (req, res) => {
             service: 'parot-wasteos-platform',
             tcpBridgePort: TCP_PORT,
             tcpBridgeActive: tcpServerActive,
+            tcpStats,
+            connectedDevices: [...liveSockets.keys()],
+            knownDevices: deviceState.size,
             uptimeSeconds: Math.round(process.uptime()),
             timestamp: new Date().toISOString()
         });
@@ -382,13 +588,17 @@ const server = http.createServer(async (req, res) => {
 
     // Dingtek DF703 4G V2.8 Ingestion Endpoint
     if (req.method === 'POST' && pathname === '/api/df703/ingest') {
+        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' });
         try {
             const body = await readJsonBody(req);
             if (!body.rawHex) {
                 return sendJson(res, 400, { error: 'rawHex field is required' });
             }
             const parsed = parseDf703Packet(body.rawHex);
-            const { entry, pendingDownlink } = recordParsedDf703(parsed, body.channel || 'HTTPS API Gateway');
+            const { entry, pendingDownlink } = recordParsedDf703(parsed, body.channel || 'HTTPS API Gateway', {
+                remoteAddress: body.remoteAddress || req.socket.remoteAddress
+            });
+            logDf703(`HTTP ingest type ${parsed.reportType} from IMEI ${parsed.imei}`);
             return sendJson(res, 201, {
                 accepted: true,
                 decoded: entry,
@@ -408,6 +618,8 @@ const server = http.createServer(async (req, res) => {
             protocol: 'Dingtek DF703 4G V2.8',
             tcpBridgeActive: tcpServerActive,
             tcpBridgePort: TCP_PORT,
+            tcpStats,
+            connectedDevices: [...liveSockets.keys()],
             packetsCount: df703Packets.length,
             packets: df703Packets.slice(0, 40),
             queuedDownlinks: queuedSummary
@@ -416,6 +628,7 @@ const server = http.createServer(async (req, res) => {
 
     // Queue Downlink Command (80029999...81) for a DF703 IMEI
     if (req.method === 'POST' && pathname === '/api/df703/downlink') {
+        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' });
         try {
             const body = await readJsonBody(req);
             const frame = buildDf703Downlink(body.cmdCode, body.value);
@@ -423,10 +636,32 @@ const server = http.createServer(async (req, res) => {
             if (!downlinkQueue.has(imei)) downlinkQueue.set(imei, []);
             const item = { imei, cmdCode: String(body.cmdCode).toUpperCase(), frame, queuedAt: new Date().toISOString() };
             downlinkQueue.get(imei).push(item);
-            return sendJson(res, 201, { queued: true, command: item });
+            const sentNow = tryDeliverNow(imei);
+            logDf703(`Downlink ${sentNow ? 'sent' : 'queued'} for ${imei}: ${frame}`);
+            return sendJson(res, 201, { queued: !sentNow, sentNow: Boolean(sentNow), command: item });
         } catch (err) {
             return sendJson(res, 400, { error: err.message });
         }
+    }
+
+    // Latest state of every DF703 that has reported (one row per IMEI)
+    if (req.method === 'GET' && pathname === '/api/df703/devices') {
+        const devices = [...deviceState.values()]
+            .map(d => ({ ...d, connected: liveSockets.has(d.imei), pendingDownlinks: (downlinkQueue.get(d.imei) || []).length }))
+            .sort((a, b) => String(b.lastSeenAt).localeCompare(String(a.lastSeenAt)));
+        return sendJson(res, 200, { count: devices.length, devices });
+    }
+    const devMatch = req.method === 'GET' && pathname.match(/^\/api\/df703\/devices\/(\d{6,20})$/);
+    if (devMatch) {
+        const imei = devMatch[1];
+        const state = deviceState.get(imei);
+        if (!state) return sendJson(res, 404, { error: `No packets received from IMEI ${imei}` });
+        return sendJson(res, 200, {
+            ...state,
+            connected: liveSockets.has(imei),
+            pendingDownlinks: downlinkQueue.get(imei) || [],
+            recentPackets: df703Packets.filter(p => p.imei === imei).slice(0, 20)
+        });
     }
 
     // Live Driver Mobile GPS Compliance & Violation Tracking + Assigned Route Sync
@@ -583,7 +818,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     const baseName = path.basename(resolvedPath);
-    if (baseName.startsWith('.') || baseName === 'server.js' || baseName === 'Dockerfile' || baseName === 'package.json') {
+    if (resolvedPath.startsWith(path.resolve(DATA_DIR) + path.sep) || baseName === 'df703_gateway.py' ||
+        baseName.startsWith('.') || baseName === 'server.js' || baseName === 'Dockerfile' || baseName === 'package.json') {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end('Not Found');
     }
@@ -601,29 +837,73 @@ const server = http.createServer(async (req, res) => {
     });
 });
 
-// Start raw TCP socket listener for native Dingtek DF703 ASCII streams (non-fatal if port busy)
+// ---------------------------------------------------------------------------
+// Raw TCP listener: the DF703 connects here directly over 4G (Server1 = IP;PORT;)
+// ---------------------------------------------------------------------------
 const tcpServer = net.createServer((socket) => {
-    socket.on('data', (buf) => {
-        const raw = buf.toString('utf8').trim();
-        try {
-            const parsed = parseDf703Packet(raw);
-            const { pendingDownlink } = recordParsedDf703(parsed, `Raw TCP:${TCP_PORT}`);
-            if (pendingDownlink) {
-                socket.write(pendingDownlink.frame);
+    const peer = `${socket.remoteAddress}:${socket.remotePort}`;
+    const push = createDf703Framer();
+    let socketImei = null;
+
+    tcpStats.connections++;
+    tcpStats.activeConnections++;
+    socket.setKeepAlive(true, 30000);
+    socket.setTimeout(SOCKET_IDLE_MS);
+    logDf703(`TCP connect ${peer}`);
+
+    socket.on('data', (chunk) => {
+        const { frames, junk } = push(chunk);
+        if (junk.length) logDf703(`Ignored ${junk.join('').length} non-frame chars from ${peer}: ${junk.join('').slice(0, 80)}`);
+
+        for (const frame of frames) {
+            try {
+                const parsed = parseDf703Packet(frame);
+                const { entry, pendingDownlink } = recordParsedDf703(parsed, `Raw TCP:${TCP_PORT}`, { remoteAddress: peer });
+                tcpStats.framesDecoded++;
+                tcpStats.lastFrameAt = entry.receivedAt;
+
+                if (socketImei !== parsed.imei) {
+                    socketImei = parsed.imei;
+                    liveSockets.set(socketImei, socket);
+                }
+                logDf703(`#${entry.id} ${entry.reportTypeLabel} IMEI ${parsed.imei}` +
+                    (parsed.reportType === '03'
+                        ? ` fw ${parsed.fwVersion} server ${parsed.serverAddress}`
+                        : ` height ${parsed.heightMm}mm fill ${parsed.fillPct}% temp ${parsed.tempC}C angle ${parsed.fallAngleDeg} batt ${parsed.voltageV}V status ${parsed.alarms.rawStatus}`));
+
+                if (pendingDownlink) {
+                    socket.write(pendingDownlink.frame);
+                    logDf703(`Downlink sent to ${parsed.imei}: ${pendingDownlink.frame}`);
+                }
+            } catch (err) {
+                tcpStats.framesRejected++;
+                logDf703(`Rejected frame from ${peer}: ${err.message} | ${frame.slice(0, 120)}`);
             }
-        } catch {
-            // Ignore malformed keepalive fragments
         }
     });
-    socket.on('error', () => {});
+
+    socket.on('timeout', () => {
+        logDf703(`TCP idle timeout ${peer}`);
+        socket.end();
+    });
+    socket.on('error', (err) => logDf703(`TCP error ${peer}: ${err.message}`));
+    socket.on('close', () => {
+        tcpStats.activeConnections--;
+        if (socketImei && liveSockets.get(socketImei) === socket) liveSockets.delete(socketImei);
+        logDf703(`TCP close ${peer}${socketImei ? ' (IMEI ' + socketImei + ')' : ''}`);
+    });
 });
 
-tcpServer.on('error', () => {
+tcpServer.on('error', (err) => {
     tcpServerActive = false;
+    logDf703(`TCP listener error on port ${TCP_PORT}: ${err.message}`);
 });
 tcpServer.listen(TCP_PORT, HOST, () => {
     tcpServerActive = true;
+    logDf703(`DF703 TCP listener on ${HOST}:${TCP_PORT} (set the sensor Server1 to YOUR_PUBLIC_IP;${TCP_PORT};)`);
 });
+
+loadPersistedPackets();
 
 server.listen(PORT, HOST, () => {
     console.log(`PAROT WasteOS server running on http://${HOST}:${PORT}`);
