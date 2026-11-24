@@ -4,8 +4,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = Number(process.env.PORT) || 3005;
 const TCP_PORT = Number(process.env.DF703_TCP_PORT) || 5000;
+const RAW_PORT = Number(process.env.PORT) || 3005;
+const PORT = RAW_PORT === TCP_PORT ? 8080 : RAW_PORT;
 const HOST = '0.0.0.0';
 const ROOT_DIR = __dirname;
 const BIN_DEPTH_MM = 1200;
@@ -915,6 +916,9 @@ tcpServer.listen(TCP_PORT, HOST, () => {
 
 loadPersistedPackets();
 
+server.on('error', (err) => {
+    console.error(`HTTP server error on port ${PORT}:`, err.message);
+});
 server.listen(PORT, HOST, () => {
-    console.log(`PAROT WasteOS server running on http://${HOST}:${PORT}`);
+    console.log(`PAROT WasteOS server running on http://${HOST}:${PORT} (DF703 TCP on :${TCP_PORT})`);
 });
