@@ -81,7 +81,9 @@ function parseLittleEndianFloat(hex8) {
  * Decode a Dingtek DF703 4G Protocol V2.8 ASCII uplink packet (0x01, 0x02, or 0x03).
  */
 function parseDf703Packet(rawInput) {
-    const cleaned = String(rawInput || '').trim().replace(/\s+/g, '');
+    let cleaned = String(rawInput || '').trim().replace(/\s+/g, '');
+    // Strip trailing FF padding that AIR780 TCP firmware appends after frame terminator 81
+    cleaned = cleaned.replace(/81F+$/i, '81');
     if (cleaned.length < 20) {
         throw new Error('Packet too short for DF703 V2.8 frame');
     }
@@ -111,7 +113,7 @@ function parseDf703Packet(rawInput) {
         const latitude = hasGps ? parseLittleEndianFloat(cleaned.slice(24, 32)) : null;
         const off = hasGps ? 32 : 16;
 
-        if (cleaned.length < off + 52) {
+        if (cleaned.length < off + 51) {
             throw new Error(`Incomplete DF703 ${reportType} packet length (${cleaned.length} chars)`);
         }
 
@@ -129,8 +131,8 @@ function parseDf703Packet(rawInput) {
         const rsrp = rsrpRaw !== null ? Number(rsrpRaw.toFixed(1)) : null;
         const frameCount = parseInt(cleaned.slice(off + 22, off + 26), 16);
         const timestampUnix = parseInt(cleaned.slice(off + 26, off + 34), 16);
-        const deviceIdField = cleaned.slice(off + 34, off + 50);
-        const imei = deviceIdField.startsWith('1') ? deviceIdField.slice(1) : deviceIdField;
+        const deviceIdField = cleaned.slice(off + 34, cleaned.length - 2);
+        const imei = (deviceIdField.length === 16 && deviceIdField.startsWith('1')) ? deviceIdField.slice(1) : deviceIdField;
         const fillPct = Math.max(0, Math.min(100, Math.round(((BIN_DEPTH_MM - heightMm) / BIN_DEPTH_MM) * 100)));
 
         return {
@@ -143,6 +145,7 @@ function parseDf703Packet(rawInput) {
             packetSizeBytes,
             imei,
             heightMm,
+            heightCm: +(heightMm / 10).toFixed(1),
             fillPct,
             hasGps,
             longitude,
@@ -184,9 +187,16 @@ function parseDf703Packet(rawInput) {
         const ultraRangeCode = cleaned.slice(42, 44);
         const workModeCode = cleaned.slice(44, 46);
         const serverModeCode = cleaned.slice(46, 48);
-        const serverAddress = cleaned.slice(48, cleaned.length - 18);
-        const devField = cleaned.slice(cleaned.length - 18, cleaned.length - 2);
-        const imei = devField.startsWith('1') ? devField.slice(1) : devField;
+        const maybe16 = cleaned.slice(cleaned.length - 18, cleaned.length - 2);
+        const use16 = maybe16.startsWith('1') && /^[0-9]{16}$/.test(maybe16);
+        const devField = use16 ? maybe16 : cleaned.slice(cleaned.length - 17, cleaned.length - 2);
+        const imei = use16 ? devField.slice(1) : devField;
+        const serverAddrHex = cleaned.slice(48, use16 ? cleaned.length - 18 : cleaned.length - 17);
+        let serverAddress = serverAddrHex;
+        if (/^[0-9A-Fa-f]+$/.test(serverAddrHex) && serverAddrHex.length % 2 === 0) {
+            const decoded = Buffer.from(serverAddrHex, 'hex').toString('utf8').replace(/[^\x20-\x7E]/g, '');
+            if (decoded.includes('.') || decoded.includes(';')) serverAddress = decoded;
+        }
 
         const rangeMap = { '00': '112K', '01': '75K', '02': '40K' };
         const workMap = { '00': 'Normal (Cycle Active)', '01': 'Detection Closed', '02': 'Demo Mode' };

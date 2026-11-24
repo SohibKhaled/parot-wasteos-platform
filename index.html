@@ -1196,6 +1196,65 @@
                         </button>
                     </div>
 
+                    <!-- Live DF703 Hardware Sensor Visualizer (2 Demo + 1 Live) -->
+                    <div id="liveSensorVisualizerCard" class="apple-card p-5 shrink-0 reveal-stage reveal-delay-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-satellite-dish"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-display font-bold text-sm text-main" id="liveVizTitle">LIVE DF703 Sensor &bull; B-LIVE-01</span>
+                                        <span id="liveVizStatusBadge" class="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 text-[11px] font-bold">Waiting for 4G Packet</span>
+                                    </div>
+                                    <div class="text-xs text-dim mt-0.5 truncate" id="liveVizSubtitle">IMEI: 864317087587096 &bull; 1 Live + 2 Demo Bins Active</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="px-2.5 py-1 rounded-full soft-well font-semibold text-sub" id="liveVizPacketsCount">0 packets</span>
+                                <button type="button" onclick="inspectBin(bins.find(b => b.isLive) || bins[0])" class="px-3 py-1.5 pill-btn-soft text-xs font-semibold">Focus on Map</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <div class="soft-well p-3.5 rounded-2xl">
+                                <div class="flex items-center justify-between text-[11px] text-sub font-semibold">
+                                    <span>Fill Level</span>
+                                    <span id="liveVizDistLbl" class="text-dim">-- cm</span>
+                                </div>
+                                <div id="liveVizFillVal" class="font-display font-extrabold text-xl text-main mt-1">--%</div>
+                                <div class="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 mt-2 overflow-hidden">
+                                    <div id="liveVizFillBar" class="h-full rounded-full transition-all duration-500" style="width: 0%; background: var(--brand);"></div>
+                                </div>
+                            </div>
+
+                            <div class="soft-well p-3.5 rounded-2xl">
+                                <div class="text-[11px] text-sub font-semibold">Temperature</div>
+                                <div id="liveVizTempVal" class="font-display font-extrabold text-xl text-main mt-1">--&deg;C</div>
+                                <div id="liveVizTempNote" class="text-[11px] text-dim mt-1">Fire limit: 75&deg;C</div>
+                            </div>
+
+                            <div class="soft-well p-3.5 rounded-2xl">
+                                <div class="text-[11px] text-sub font-semibold">Tilt Angle</div>
+                                <div id="liveVizAngleVal" class="font-display font-extrabold text-xl text-main mt-1">--&deg;</div>
+                                <div id="liveVizAngleNote" class="text-[11px] text-dim mt-1">Upright (&lt; 30&deg;)</div>
+                            </div>
+
+                            <div class="soft-well p-3.5 rounded-2xl">
+                                <div class="text-[11px] text-sub font-semibold">Battery</div>
+                                <div id="liveVizBattVal" class="font-display font-extrabold text-xl text-main mt-1">--%</div>
+                                <div id="liveVizVoltNote" class="text-[11px] text-dim mt-1">-- V</div>
+                            </div>
+
+                            <div class="soft-well p-3.5 rounded-2xl col-span-2 sm:col-span-1">
+                                <div class="text-[11px] text-sub font-semibold">4G Signal &amp; Sync</div>
+                                <div id="liveVizSignalVal" class="font-display font-extrabold text-xl text-main mt-1">--</div>
+                                <div id="liveVizLastSeen" class="text-[11px] text-dim mt-1">Awaiting uplink</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Interactive Crisp Vector Map + Explaining Inspector -->
                     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1 min-h-[440px]">
                         <div id="mapColumn" class="lg:col-span-9 apple-card relative overflow-hidden flex flex-col min-h-[430px] reveal-stage reveal-delay-2">
@@ -2655,45 +2714,78 @@
         function isBinLowBatt(b) { return b.battery < settings.lowBattThreshold; }
 
         function generateBins() {
-            const out = [], cats = ['Wheeled Container 1,100L', 'Commercial Bin 2,400L', 'Underground Vault 3,000L', 'Smart Curb Bin 660L'];
-            // 24 Cairo bins (15 Madinaty + 9 New Cairo 90th) with wide clean street spacing
-            for (let i = 1; i <= 24; i++) {
-                const z = i <= 15 ? 'madinaty' : 'tagamoa';
-                const anchor = ZONE_ANCHORS[z].streets[(i - 1) % ZONE_ANCHORS[z].streets.length];
-                const fire = i === 4, fall = i === 1, lowB = (i === 7 || i === 19), full = i <= 6;
-                const fill = (fire || fall) ? 95 : (full ? Math.floor(82 + ((i * 3) % 14)) : (i % 3 === 0 ? Math.floor(46 + ((i * 5) % 26)) : Math.floor(14 + ((i * 4) % 22))));
-                const offsetLat = (((i * 7) % 9) - 4) * 0.00055;
-                const offsetLng = (((i * 5) % 9) - 4) * 0.00065;
-                out.push({
-                    id: i, code: `B-${100 + i}`, name: `Bin #${100 + i} • ${anchor[2]}`,
-                    zone: z, city: 'cairo', street: anchor[2], category: cats[i % cats.length],
-                    lat: anchor[0] + offsetLat, lng: anchor[1] + offsetLng,
-                    fill, temp: fire ? 71 : 23 + (i % 9),
-                    angle: fall ? 84 : (i % 5),
-                    battery: lowB ? 24 + (i % 6) : 88 + (i % 12),
-                    rssi: -66 - (i % 24), lastSeen: (i % 12) + 1,
-                    serial: `8643760469673${65 + i}`, model: 'DF703 4G Smart Bin'
-                });
-            }
-            // 12 Riyadh bins in KAFD & Olaya
-            for (let i = 25; i <= 36; i++) {
-                const anchor = ZONE_ANCHORS.riyadh.streets[(i - 25) % ZONE_ANCHORS.riyadh.streets.length];
-                const fire = i === 25, lowB = i === 29, full = i <= 28;
-                const fill = fire ? 94 : (full ? Math.floor(83 + ((i * 3) % 12)) : (i % 2 === 0 ? Math.floor(48 + ((i * 4) % 24)) : Math.floor(15 + ((i * 3) % 20))));
-                const offsetLat = (((i * 7) % 7) - 3) * 0.00075;
-                const offsetLng = (((i * 5) % 7) - 3) * 0.00085;
-                out.push({
-                    id: i, code: `B-${100 + i}`, name: `Bin #${100 + i} • ${anchor[2]}`,
-                    zone: 'riyadh', city: 'riyadh', street: anchor[2], category: cats[i % cats.length],
-                    lat: anchor[0] + offsetLat, lng: anchor[1] + offsetLng,
-                    fill, temp: fire ? 73 : 27 + (i % 8),
-                    angle: i % 4,
-                    battery: lowB ? 26 : 90 + (i % 10),
-                    rssi: -69 - (i % 22), lastSeen: (i % 10) + 1,
-                    serial: `8686550792555${10 + i}`, model: 'DF703 4G Smart Bin'
-                });
-            }
-            return out;
+            const mAnchors = ZONE_ANCHORS.madinaty.streets;
+            return [
+                {
+                    id: 1,
+                    code: 'B-LIVE-01',
+                    name: 'LIVE DF703 • Central Spine',
+                    zone: 'madinaty',
+                    city: 'cairo',
+                    street: mAnchors[0][2],
+                    category: 'Smart Curb Bin 660L (Live Hardware)',
+                    lat: mAnchors[0][0],
+                    lng: mAnchors[0][1],
+                    fill: 0,
+                    heightCm: 120,
+                    temp: 24,
+                    angle: 0,
+                    battery: 100,
+                    voltageV: 3.6,
+                    rssi: -65,
+                    lastSeen: 0,
+                    imei: '864317087587096',
+                    serial: '864317087587096',
+                    model: 'DF703 4G Live Sensor',
+                    isLive: true
+                },
+                {
+                    id: 2,
+                    code: 'B-DEMO-01',
+                    name: 'Demo Bin #01 • ' + mAnchors[1][2],
+                    zone: 'madinaty',
+                    city: 'cairo',
+                    street: mAnchors[1][2],
+                    category: 'Wheeled Container 1,100L (Demo)',
+                    lat: mAnchors[1][0] + 0.0012,
+                    lng: mAnchors[1][1] + 0.0014,
+                    fill: 88,
+                    heightCm: 14.4,
+                    temp: 28,
+                    angle: 2,
+                    battery: 91,
+                    voltageV: 3.64,
+                    rssi: -72,
+                    lastSeen: 3,
+                    imei: 'DEMO-DF703-001',
+                    serial: 'DEMO-DF703-001',
+                    model: 'DF703 4G Demo Bin',
+                    isDemo: true
+                },
+                {
+                    id: 3,
+                    code: 'B-DEMO-02',
+                    name: 'Demo Bin #02 • ' + mAnchors[2][2],
+                    zone: 'madinaty',
+                    city: 'cairo',
+                    street: mAnchors[2][2],
+                    category: 'Commercial Bin 2,400L (Demo)',
+                    lat: mAnchors[2][0] - 0.0011,
+                    lng: mAnchors[2][1] + 0.0016,
+                    fill: 34,
+                    heightCm: 79.2,
+                    temp: 25,
+                    angle: 3,
+                    battery: 84,
+                    voltageV: 3.58,
+                    rssi: -76,
+                    lastSeen: 6,
+                    imei: 'DEMO-DF703-002',
+                    serial: 'DEMO-DF703-002',
+                    model: 'DF703 4G Demo Bin',
+                    isDemo: true
+                }
+            ];
         }
 
         function getScopedBins() {
@@ -3747,6 +3839,71 @@
             }
         }
 
+        function renderLiveSensorCard(latestPkt, totalCount) {
+            const liveBin = bins.find(b => b.isLive) || bins[0];
+            if (!liveBin) return;
+
+            const badge = document.getElementById('liveVizStatusBadge');
+            const pktLbl = document.getElementById('liveVizPacketsCount');
+            const sub = document.getElementById('liveVizSubtitle');
+            const fillVal = document.getElementById('liveVizFillVal');
+            const fillBar = document.getElementById('liveVizFillBar');
+            const distLbl = document.getElementById('liveVizDistLbl');
+            const tempVal = document.getElementById('liveVizTempVal');
+            const tempNote = document.getElementById('liveVizTempNote');
+            const angleVal = document.getElementById('liveVizAngleVal');
+            const angleNote = document.getElementById('liveVizAngleNote');
+            const battVal = document.getElementById('liveVizBattVal');
+            const voltNote = document.getElementById('liveVizVoltNote');
+            const sigVal = document.getElementById('liveVizSignalVal');
+            const lastSeen = document.getElementById('liveVizLastSeen');
+
+            if (pktLbl) pktLbl.innerText = `${totalCount || 0} live packet${totalCount === 1 ? '' : 's'}`;
+            if (sub) sub.innerText = `IMEI: ${liveBin.imei || liveBin.serial} • 1 Live + 2 Demo Bins Active`;
+
+            if (latestPkt) {
+                if (badge) {
+                    badge.className = 'px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[11px] font-bold';
+                    badge.innerText = `LIVE • ${latestPkt.reportTypeLabel || 'Connected'}`;
+                }
+                if (lastSeen) lastSeen.innerText = latestPkt.receivedAt ? new Date(latestPkt.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Just now';
+            } else {
+                if (badge) {
+                    badge.className = 'px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 text-[11px] font-bold';
+                    badge.innerText = 'Waiting for 4G Packet';
+                }
+            }
+
+            const pct = Math.max(0, Math.min(100, Number(liveBin.fill || 0)));
+            if (fillVal) fillVal.innerText = `${pct}%`;
+            if (distLbl) distLbl.innerText = liveBin.heightCm != null ? `${liveBin.heightCm} cm` : '-- cm';
+            if (fillBar) {
+                fillBar.style.width = `${pct}%`;
+                fillBar.style.background = pct >= settings.fullThreshold ? '#E11D48' : pct >= 50 ? '#D97706' : '#10B981';
+            }
+
+            if (tempVal) {
+                tempVal.innerText = `${liveBin.temp}°C`;
+                tempVal.className = `font-display font-extrabold text-xl mt-1 ${isBinFire(liveBin) ? 'text-rose-500' : 'text-main'}`;
+            }
+            if (tempNote) tempNote.innerText = isBinFire(liveBin) ? 'FIRE ALERT ACTIVE' : `Fire limit: ${settings.fireTemp}°C`;
+
+            if (angleVal) {
+                angleVal.innerText = `${liveBin.angle}°`;
+                angleVal.className = `font-display font-extrabold text-xl mt-1 ${isBinTilted(liveBin) ? 'text-[#A78BFA]' : 'text-main'}`;
+            }
+            if (angleNote) angleNote.innerText = isBinTilted(liveBin) ? 'TIPPED OVER' : `Upright (< ${settings.tiltDeg}°)`;
+
+            if (battVal) battVal.innerText = `${liveBin.battery}%`;
+            if (voltNote) voltNote.innerText = liveBin.voltageV ? `${liveBin.voltageV} V` : 'Nominal 3.6 V';
+
+            const sig = signalQualityLabel(liveBin.rssi || -65);
+            if (sigVal) {
+                sigVal.innerText = sig.label;
+                sigVal.className = `font-display font-extrabold text-xl mt-1 ${sig.cls}`;
+            }
+        }
+
         async function pollLiveBackendSync() {
             const badge = document.getElementById('livePacketSyncBadge');
             try {
@@ -3755,19 +3912,32 @@
                 const data = await res.json();
                 const pkts = Array.isArray(data.packets) ? data.packets : [];
                 if (badge) badge.innerText = `Auto-Sync Active (${pkts.length} live packets)`;
-                pkts.slice(0, 10).forEach(p => {
-                    const target = bins.find(b => b.imei === p.imei || b.code === p.imei);
-                    if (target && p.parsed) {
-                        if (typeof p.parsed.fillPct === 'number') target.fill = p.parsed.fillPct;
-                        if (typeof p.parsed.temperatureC === 'number') target.temp = p.parsed.temperatureC;
-                        if (typeof p.parsed.batteryPct === 'number') target.battery = p.parsed.batteryPct;
-                        if (typeof p.parsed.tiltAngleDeg === 'number') target.angle = p.parsed.tiltAngleDeg;
-                        target.lastSeen = 0;
+
+                let latestTelemetry = null;
+                if (pkts.length) {
+                    // Packets are stored newest-first (unshift in server.js)
+                    latestTelemetry = pkts.find(p => p.reportType === '01' || p.reportType === '02') || pkts[0];
+                    const liveTarget = bins.find(b => b.imei === latestTelemetry.imei) || bins.find(b => b.isLive) || bins[0];
+                    if (liveTarget) {
+                        if (latestTelemetry.imei) {
+                            liveTarget.imei = latestTelemetry.imei;
+                            liveTarget.serial = latestTelemetry.imei;
+                        }
+                        if (typeof latestTelemetry.fillPct === 'number') liveTarget.fill = latestTelemetry.fillPct;
+                        if (typeof latestTelemetry.heightCm === 'number') liveTarget.heightCm = latestTelemetry.heightCm;
+                        if (typeof latestTelemetry.tempC === 'number') liveTarget.temp = latestTelemetry.tempC;
+                        if (typeof latestTelemetry.batteryPct === 'number') liveTarget.battery = latestTelemetry.batteryPct;
+                        if (typeof latestTelemetry.voltageV === 'number') liveTarget.voltageV = latestTelemetry.voltageV;
+                        if (typeof latestTelemetry.fallAngleDeg === 'number') liveTarget.angle = latestTelemetry.fallAngleDeg;
+                        if (typeof latestTelemetry.rsrp === 'number' && latestTelemetry.rsrp < 0) liveTarget.rssi = latestTelemetry.rsrp;
+                        liveTarget.lastSeen = 0;
                     }
-                });
-                if (pkts.length) refreshMetricsAndLists();
+                    refreshMetricsAndLists();
+                }
+                renderLiveSensorCard(latestTelemetry, pkts.length);
             } catch (e) {
                 if (badge) badge.innerText = 'Auto-Sync Reconnecting...';
+                renderLiveSensorCard(null, 0);
             }
         }
 
@@ -4443,7 +4613,8 @@
             setInterval(pollLiveBackendSync, 4000);
 
             setInterval(() => {
-                const r = bins[Math.floor(Math.random() * bins.length)];
+                const demoBins = bins.filter(b => b.isDemo);
+                const r = demoBins[Math.floor(Math.random() * demoBins.length)];
                 if (r && r.fill < 98) { r.fill += 1; refreshMetricsAndLists(); }
             }, 6000);
         });
