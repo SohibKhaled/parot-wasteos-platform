@@ -1213,6 +1213,7 @@
                             </div>
                             <div class="flex items-center gap-2 text-xs">
                                 <span class="px-2.5 py-1 rounded-full soft-well font-semibold text-sub" id="liveVizPacketsCount">0 packets</span>
+                                <button type="button" onclick="pollLiveBackendSync(true)" class="px-3 py-1.5 pill-btn-primary text-xs font-bold">Sync Now</button>
                                 <button type="button" onclick="inspectBin(bins.find(b => b.isLive) || bins[0])" class="px-3 py-1.5 pill-btn-soft text-xs font-semibold">Focus on Map</button>
                             </div>
                         </div>
@@ -1849,6 +1850,37 @@
                         <span id="livePacketSyncBadge" class="px-3 py-1.5 rounded-full bg-emerald-500/15 text-emerald-500 text-xs font-bold shrink-0">Auto-Sync Active (4s)</span>
                     </div>
 
+                    <!-- Live Incoming DF703 Packets Stream Table -->
+                    <div class="apple-card p-5 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="font-display text-base font-bold text-main">Live Incoming DF703 Packets (Real-Time)</h3>
+                                <p class="text-xs text-sub">Every decoded <code>0x01</code> Alert, <code>0x02</code> Heartbeat, and <code>0x03</code> Config frame received from TCP :5000 / HTTPS.</p>
+                            </div>
+                            <button type="button" onclick="pollLiveBackendSync(true)" class="px-3.5 py-2 pill-btn-primary text-xs font-bold">Refresh Packets</button>
+                        </div>
+                        <div class="overflow-x-auto max-h-72 overflow-y-auto">
+                            <table class="clean-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>IMEI</th>
+                                        <th>Fill / Dist</th>
+                                        <th>Temp</th>
+                                        <th>Tilt</th>
+                                        <th>Battery</th>
+                                        <th>Raw Frame</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="livePacketsTableBody">
+                                    <tr><td colspan="9" class="text-center text-dim py-6">Loading live packets...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Live DF703 Hex Decoder + Downlink Config Builder -->
                     <div class="grid grid-cols-1 xl:grid-cols-12 gap-5">
                         <div class="xl:col-span-7 apple-card p-6 space-y-4">
@@ -2429,26 +2461,10 @@
         }
 
         async function runBootSplashSequence() {
-            const bar = document.getElementById('bootProgressBar');
-            const pctLbl = document.getElementById('bootPctLabel');
-            const statusLbl = document.getElementById('bootStatusLabel');
             const splash = document.getElementById('bootSplashOverlay');
             const authGate = document.getElementById('authGateOverlay');
-
-            const steps = [
-                { v: 42, txt: 'Loading crisp vector city maps...' },
-                { v: 78, txt: 'Syncing 36 smart bins & truck depots...' },
-                { v: 100, txt: 'Ready.' }
-            ];
-            for (const s of steps) {
-                await new Promise(r => setTimeout(r, 90));
-                if (bar) bar.value = s.v;
-                if (pctLbl) pctLbl.innerText = `${s.v}%`;
-                if (statusLbl) statusLbl.innerText = s.txt;
-            }
-            await new Promise(r => setTimeout(r, 80));
-            showOverlayWithFade(authGate);
-            await hideOverlayWithFade(splash);
+            if (authGate) authGate.hidden = false;
+            if (splash) splash.hidden = true;
         }
 
         function applyRoleNavVisibility(role) {
@@ -2472,20 +2488,16 @@
             applyRoleNavVisibility(role);
 
             const loader = document.getElementById('workspaceLoaderOverlay');
-            document.getElementById('loaderHeadline').innerText = `Opening ${TENANTS[tenantId]?.title || 'Workspace'}...`;
-            showOverlayWithFade(loader);
-
-            await hideOverlayWithFade(document.getElementById('authGateOverlay'));
+            const authGate = document.getElementById('authGateOverlay');
+            if (loader) loader.hidden = true;
+            if (authGate) authGate.hidden = true;
             document.getElementById('appWorkspaceRoot')?.removeAttribute('inert');
 
-            setTimeout(() => {
-                hideOverlayWithFade(loader);
-                if (map) { map.invalidateSize(); renderMapMarkers(activeFilter); }
-                if (role === 'Driver') { initDriverMap(); }
-                const tenantTitle = TENANTS[tenantId]?.title || tenantId;
-                logPlatformStory('Workspace Opened', `Signed in to ${tenantTitle} as ${role}. Loaded ${bins.length} DF703 bins with live ${settings.fireTemp}°C fire protection.`, 'success');
-                showToast(role === 'Driver' ? 'Driver Mobile Mode Active — Ready for GPS & Route' : `Welcome to ${tenantTitle}`, 'success');
-            }, 180);
+            if (map) { map.invalidateSize(); renderMapMarkers(activeFilter); }
+            if (role === 'Driver') { initDriverMap(); }
+            const tenantTitle = TENANTS[tenantId]?.title || tenantId;
+            logPlatformStory('Workspace Opened', `Signed in to ${tenantTitle} as ${role}. Loaded ${bins.length} DF703 bins with live ${settings.fireTemp}°C fire protection.`, 'success');
+            showToast(role === 'Driver' ? 'Driver Mobile Mode Active — Ready for GPS & Route' : `Welcome to ${tenantTitle}`, 'success');
         }
 
         function quickLogin(t, r, email) { enterWorkspace(t, r, email); }
@@ -3904,7 +3916,39 @@
             }
         }
 
-        async function pollLiveBackendSync() {
+        function renderLivePacketsTable(pkts) {
+            const tbody = document.getElementById('livePacketsTableBody');
+            if (!tbody) return;
+            if (!pkts.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-dim py-6">No packets received yet. Waiting for sensor uplink...</td></tr>';
+                return;
+            }
+            tbody.innerHTML = pkts.slice(0, 25).map(p => {
+                const t = p.receivedAt ? new Date(p.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--';
+                const typeBadge = p.reportType === '01'
+                    ? '<span class="px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-500 text-[10px] font-bold">0x01 Alert</span>'
+                    : p.reportType === '02'
+                    ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold">0x02 Heartbeat</span>'
+                    : '<span class="px-2 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-[10px] font-bold">0x03 Config</span>';
+                const fillCell = typeof p.fillPct === 'number' ? `<span class="font-bold">${p.fillPct}%</span> <span class="text-dim">(${p.heightCm ?? '--'} cm)</span>` : '<span class="text-dim">Config</span>';
+                const tempCell = typeof p.tempC === 'number' ? `${p.tempC}&deg;C` : '--';
+                const tiltCell = typeof p.fallAngleDeg === 'number' ? `${p.fallAngleDeg}&deg;` : '--';
+                const battCell = typeof p.batteryPct === 'number' ? `${p.batteryPct}% (${p.voltageV ?? '--'}V)` : '--';
+                return `<tr>
+                    <td class="font-mono text-dim">#${p.id ?? ''}</td>
+                    <td class="text-sub whitespace-nowrap">${t}</td>
+                    <td>${typeBadge}</td>
+                    <td class="font-mono text-xs text-main">${p.imei || '--'}</td>
+                    <td>${fillCell}</td>
+                    <td>${tempCell}</td>
+                    <td>${tiltCell}</td>
+                    <td>${battCell}</td>
+                    <td class="font-mono text-[10px] text-dim max-w-[180px] truncate" title="${p.rawPacket || ''}">${p.rawPacket || '--'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function pollLiveBackendSync(manual = false) {
             const badge = document.getElementById('livePacketSyncBadge');
             try {
                 const res = await fetch('/api/df703/packets');
@@ -3912,10 +3956,10 @@
                 const data = await res.json();
                 const pkts = Array.isArray(data.packets) ? data.packets : [];
                 if (badge) badge.innerText = `Auto-Sync Active (${pkts.length} live packets)`;
+                renderLivePacketsTable(pkts);
 
                 let latestTelemetry = null;
                 if (pkts.length) {
-                    // Packets are stored newest-first (unshift in server.js)
                     latestTelemetry = pkts.find(p => p.reportType === '01' || p.reportType === '02') || pkts[0];
                     const liveTarget = bins.find(b => b.imei === latestTelemetry.imei) || bins.find(b => b.isLive) || bins[0];
                     if (liveTarget) {
@@ -3935,9 +3979,11 @@
                     refreshMetricsAndLists();
                 }
                 renderLiveSensorCard(latestTelemetry, pkts.length);
+                if (manual) showToast(`Synced ${pkts.length} live packet${pkts.length === 1 ? '' : 's'}`, 'success');
             } catch (e) {
                 if (badge) badge.innerText = 'Auto-Sync Reconnecting...';
                 renderLiveSensorCard(null, 0);
+                if (manual) showToast('Sync check failed — retrying...', 'warning');
             }
         }
 
