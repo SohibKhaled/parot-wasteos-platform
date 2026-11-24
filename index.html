@@ -1208,7 +1208,7 @@
                                         <span class="font-display font-bold text-sm text-main" id="liveVizTitle">LIVE DF703 Sensor &bull; B-LIVE-01</span>
                                         <span id="liveVizStatusBadge" class="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 text-[11px] font-bold">Waiting for 4G Packet</span>
                                     </div>
-                                    <div class="text-xs text-dim mt-0.5 truncate" id="liveVizSubtitle">IMEI: 864317087587096 &bull; 1 Live + 2 Demo Bins Active</div>
+                                    <div class="text-xs text-dim mt-0.5 truncate" id="liveVizSubtitle">IMEI: 864317087587096 &bull; Live Hardware Only</div>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 text-xs">
@@ -2750,52 +2750,6 @@
                     serial: '864317087587096',
                     model: 'DF703 4G Live Sensor',
                     isLive: true
-                },
-                {
-                    id: 2,
-                    code: 'B-DEMO-01',
-                    name: 'Demo Bin #01 • ' + mAnchors[1][2],
-                    zone: 'madinaty',
-                    city: 'cairo',
-                    street: mAnchors[1][2],
-                    category: 'Wheeled Container 1,100L (Demo)',
-                    lat: mAnchors[1][0] + 0.0012,
-                    lng: mAnchors[1][1] + 0.0014,
-                    fill: 88,
-                    heightCm: 14.4,
-                    temp: 28,
-                    angle: 2,
-                    battery: 91,
-                    voltageV: 3.64,
-                    rssi: -72,
-                    lastSeen: 3,
-                    imei: 'DEMO-DF703-001',
-                    serial: 'DEMO-DF703-001',
-                    model: 'DF703 4G Demo Bin',
-                    isDemo: true
-                },
-                {
-                    id: 3,
-                    code: 'B-DEMO-02',
-                    name: 'Demo Bin #02 • ' + mAnchors[2][2],
-                    zone: 'madinaty',
-                    city: 'cairo',
-                    street: mAnchors[2][2],
-                    category: 'Commercial Bin 2,400L (Demo)',
-                    lat: mAnchors[2][0] - 0.0011,
-                    lng: mAnchors[2][1] + 0.0016,
-                    fill: 34,
-                    heightCm: 79.2,
-                    temp: 25,
-                    angle: 3,
-                    battery: 84,
-                    voltageV: 3.58,
-                    rssi: -76,
-                    lastSeen: 6,
-                    imei: 'DEMO-DF703-002',
-                    serial: 'DEMO-DF703-002',
-                    model: 'DF703 4G Demo Bin',
-                    isDemo: true
                 }
             ];
         }
@@ -3871,7 +3825,7 @@
             const lastSeen = document.getElementById('liveVizLastSeen');
 
             if (pktLbl) pktLbl.innerText = `${totalCount || 0} live packet${totalCount === 1 ? '' : 's'}`;
-            if (sub) sub.innerText = `IMEI: ${liveBin.imei || liveBin.serial} • 1 Live + 2 Demo Bins Active`;
+            if (sub) sub.innerText = `IMEI: ${liveBin.imei || liveBin.serial} • Live Hardware Only (${bins.length} active device${bins.length === 1 ? '' : 's'})`;
 
             if (latestPkt) {
                 if (badge) {
@@ -3960,22 +3914,52 @@
 
                 let latestTelemetry = null;
                 if (pkts.length) {
-                    latestTelemetry = pkts.find(p => p.reportType === '01' || p.reportType === '02') || pkts[0];
-                    const liveTarget = bins.find(b => b.imei === latestTelemetry.imei) || bins.find(b => b.isLive) || bins[0];
-                    if (liveTarget) {
-                        if (latestTelemetry.imei) {
-                            liveTarget.imei = latestTelemetry.imei;
-                            liveTarget.serial = latestTelemetry.imei;
+                    const mAnchors = ZONE_ANCHORS.madinaty.streets;
+                    // Update each real IMEI seen in packets; auto-add new real devices dynamically
+                    const seenImeis = new Set();
+                    pkts.forEach(p => {
+                        if (!p.imei || seenImeis.has(p.imei)) return;
+                        seenImeis.add(p.imei);
+                        let target = bins.find(b => b.imei === p.imei);
+                        if (!target) {
+                            const idx = bins.length;
+                            const anchor = mAnchors[idx % mAnchors.length];
+                            target = {
+                                id: idx + 1,
+                                code: `B-LIVE-0${idx + 1}`,
+                                name: `LIVE DF703 • ${anchor[2]}`,
+                                zone: 'madinaty',
+                                city: 'cairo',
+                                street: anchor[2],
+                                category: 'Smart Curb Bin 660L (Live Hardware)',
+                                lat: anchor[0] + (idx * 0.0009),
+                                lng: anchor[1] + (idx * 0.0009),
+                                fill: 0,
+                                heightCm: 120,
+                                temp: 24,
+                                angle: 0,
+                                battery: 100,
+                                voltageV: 3.6,
+                                rssi: -65,
+                                lastSeen: 0,
+                                imei: p.imei,
+                                serial: p.imei,
+                                model: 'DF703 4G Live Sensor',
+                                isLive: true
+                            };
+                            bins.push(target);
                         }
-                        if (typeof latestTelemetry.fillPct === 'number') liveTarget.fill = latestTelemetry.fillPct;
-                        if (typeof latestTelemetry.heightCm === 'number') liveTarget.heightCm = latestTelemetry.heightCm;
-                        if (typeof latestTelemetry.tempC === 'number') liveTarget.temp = latestTelemetry.tempC;
-                        if (typeof latestTelemetry.batteryPct === 'number') liveTarget.battery = latestTelemetry.batteryPct;
-                        if (typeof latestTelemetry.voltageV === 'number') liveTarget.voltageV = latestTelemetry.voltageV;
-                        if (typeof latestTelemetry.fallAngleDeg === 'number') liveTarget.angle = latestTelemetry.fallAngleDeg;
-                        if (typeof latestTelemetry.rsrp === 'number' && latestTelemetry.rsrp < 0) liveTarget.rssi = latestTelemetry.rsrp;
-                        liveTarget.lastSeen = 0;
-                    }
+                        const latestForImei = pkts.find(x => x.imei === p.imei && (x.reportType === '01' || x.reportType === '02')) || p;
+                        if (typeof latestForImei.fillPct === 'number') target.fill = latestForImei.fillPct;
+                        if (typeof latestForImei.heightCm === 'number') target.heightCm = latestForImei.heightCm;
+                        if (typeof latestForImei.tempC === 'number') target.temp = latestForImei.tempC;
+                        if (typeof latestForImei.batteryPct === 'number') target.battery = latestForImei.batteryPct;
+                        if (typeof latestForImei.voltageV === 'number') target.voltageV = latestForImei.voltageV;
+                        if (typeof latestForImei.fallAngleDeg === 'number') target.angle = latestForImei.fallAngleDeg;
+                        if (typeof latestForImei.rsrp === 'number' && latestForImei.rsrp < 0) target.rssi = latestForImei.rsrp;
+                        target.lastSeen = 0;
+                    });
+                    latestTelemetry = pkts.find(p => p.reportType === '01' || p.reportType === '02') || pkts[0];
                     refreshMetricsAndLists();
                 }
                 renderLiveSensorCard(latestTelemetry, pkts.length);
@@ -4657,12 +4641,6 @@
 
             pollLiveBackendSync();
             setInterval(pollLiveBackendSync, 4000);
-
-            setInterval(() => {
-                const demoBins = bins.filter(b => b.isDemo);
-                const r = demoBins[Math.floor(Math.random() * demoBins.length)];
-                if (r && r.fill < 98) { r.fill += 1; refreshMetricsAndLists(); }
-            }, 6000);
         });
     </script>
 </body>
