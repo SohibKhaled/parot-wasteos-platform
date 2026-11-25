@@ -9,9 +9,10 @@ const RAW_PORT = Number(process.env.PORT) || 3005;
 const PORT = RAW_PORT === TCP_PORT ? 8080 : RAW_PORT;
 const HOST = '0.0.0.0';
 const ROOT_DIR = __dirname;
-// Default distance (mm) from the sensor face to the bin floor. Override per sensor with
-// POST /api/df703/devices/:imei/settings {"binDepthMm": 1100}, or globally with BIN_DEPTH_MM.
-const BIN_DEPTH_MM = Number(process.env.BIN_DEPTH_MM) || 1200;
+// Default distance (mm) from the sensor face to the bin floor (1000 mm = 100 cm -> 0% full).
+// Override per sensor with POST /api/df703/devices/:imei/settings {"binDepthMm": 1000}, or via Admin Preferences.
+let defaultBinDepthMm = Number(process.env.BIN_DEPTH_MM) || 1000;
+const BIN_DEPTH_MM = defaultBinDepthMm;
 // The DF703 reports 0x270F (9999 mm) when the ultrasonic pulse gets no echo
 // (sensor tilted, lid open, nothing in range). That is "no reading", not an empty bin.
 const NO_ECHO_MIN_MM = 9000;
@@ -69,7 +70,18 @@ const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, 'data');
 const PACKETS_FILE = path.join(DATA_DIR, 'df703_packets.jsonl');
 const INGEST_TOKEN = process.env.INGEST_TOKEN || '';
 const DEVICE_SETTINGS_FILE = path.join(DATA_DIR, 'df703_device_settings.json');
+const ADMIN_PREFS_FILE = path.join(DATA_DIR, 'admin_preferences.json');
 let deviceSettings = {};                 // imei -> { binDepthMm }
+let adminPreferences = {
+    binDepthCm: Math.round(defaultBinDepthMm / 10),
+    fireTemp: 55,
+    fullThreshold: 80,
+    tiltDeg: 35,
+    lowBattThreshold: 35,
+    defaultCostPerKm: 14,
+    routeEndPolicy: 'round_trip',
+    autoSchedulerEnabled: true
+};
 const voltageHistory = new Map();        // imei -> last few battery voltages
 const MAX_STREAM_BUFFER = 4096;
 
@@ -94,7 +106,7 @@ function parseLittleEndianFloat(hex8) {
 
 /** Fill % from the measured distance; null when the sensor got no echo. */
 function computeFillPct(heightMm, depthMm) {
-    if (!(heightMm > 0 && heightMm < NO_ECHO_MIN_MM)) return null;
+    if (!(heightMm >= 0 && heightMm < NO_ECHO_MIN_MM) || !(depthMm > 0)) return null;
     return Math.max(0, Math.min(100, Math.round(((depthMm - heightMm) / depthMm) * 100)));
 }
 
@@ -155,8 +167,8 @@ function parseDf703Packet(rawInput) {
         const timestampUnix = parseInt(cleaned.slice(off + 26, off + 34), 16);
         const deviceIdField = cleaned.slice(off + 34, cleaned.length - 2);
         const imei = (deviceIdField.length === 16 && deviceIdField.startsWith('1')) ? deviceIdField.slice(1) : deviceIdField;
-        const heightValid = heightMm > 0 && heightMm < NO_ECHO_MIN_MM;
-        const fillPct = computeFillPct(heightMm, BIN_DEPTH_MM);
+        const heightValid = heightMm >= 0 && heightMm < NO_ECHO_MIN_MM;
+        const fillPct = computeFillPct(heightMm, defaultBinDepthMm);
 
         return {
             protocol: 'Dingtek DF703 4G V2.8',
@@ -449,7 +461,7 @@ function median(values) {
  */
 function enrichReading(parsed) {
     if (parsed.reportType !== '01' && parsed.reportType !== '02') return parsed;
-    const depth = Number(deviceSettings[parsed.imei]?.binDepthMm) || BIN_DEPTH_MM;
+    const depth = Number(deviceSettings[parsed.imei]?.binDepthMm) || defaultBinDepthMm;
     const recent = [...(voltageHistory.get(parsed.imei) || []), parsed.voltageV]
         .filter(v => typeof v === 'number').slice(-BATT_SMOOTH_WINDOW);
     const avg = recent.length ? Number(median(recent).toFixed(2)) : null;
@@ -476,6 +488,47 @@ function loadDeviceSettings() {
 function saveDeviceSettings() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(DEVICE_SETTINGS_FILE, JSON.stringify(deviceSettings, null, 2));
+}
+
+function loadAdminPreferences() {
+    try {
+        if (fs.existsSync(ADMIN_PREFS_FILE)) {
+            const loaded = JSON.parse(fs.readFileSync(ADMIN_PREFS_FILE, 'utf8'));
+            if (loaded && typeof loaded === 'object') {
+                Object.assign(adminPreferences, loaded);
+                if (Number(adminPreferences.binDepthCm) > 0) {
+                    defaultBinDepthMm = Math.round(Number(adminPreferences.binDepthCm) * 10);
+                }
+            }
+        }
+    } catch (err) {
+        logDf703('WARN could not load admin preferences:', err.message);
+    }
+}
+
+function saveAdminPreferences() {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(ADMIN_PREFS_FILE, JSON.stringify(adminPreferences, null, 2));
+}
+
+function recomputeStoredFills() {
+    for (const p of df703Packets) {
+        if (p.reportType === '01' || p.reportType === '02') {
+            const depth = Number(deviceSettings[p.imei]?.binDepthMm) || defaultBinDepthMm;
+            p.binDepthMm = depth;
+            p.fillPct = computeFillPct(p.heightMm, depth);
+            if (p.parsed) {
+                p.parsed.binDepthMm = depth;
+                p.parsed.fillPct = p.fillPct;
+            }
+        }
+    }
+    for (const [imei, dev] of deviceState.entries()) {
+        if (typeof dev.heightMm === 'number') {
+            const depth = Number(deviceSettings[imei]?.binDepthMm) || defaultBinDepthMm;
+            dev.fillPct = computeFillPct(dev.heightMm, depth);
+        }
+    }
 }
 
 /**
@@ -737,10 +790,45 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
+    // Admin Preferences (persisted in DATA_DIR/admin_preferences.json)
+    if (req.method === 'GET' && pathname === '/api/admin/preferences') {
+        return sendJson(res, 200, { ok: true, preferences: adminPreferences });
+    }
+    if (req.method === 'POST' && pathname === '/api/admin/preferences') {
+        try {
+            const body = await readJsonBody(req);
+            if (!body || typeof body !== 'object') {
+                return sendJson(res, 400, { error: 'Invalid JSON body' });
+            }
+            const next = { ...adminPreferences };
+            if (body.binDepthCm !== undefined) {
+                const cm = Number(body.binDepthCm);
+                if (!Number.isFinite(cm) || cm < 1 || cm > 500) {
+                    return sendJson(res, 400, { error: 'binDepthCm must be between 1 and 500 cm' });
+                }
+                next.binDepthCm = Math.round(cm);
+                defaultBinDepthMm = next.binDepthCm * 10;
+            }
+            if (body.fireTemp !== undefined) next.fireTemp = Math.max(0, Math.min(255, Number(body.fireTemp)));
+            if (body.fullThreshold !== undefined) next.fullThreshold = Math.max(0, Math.min(100, Number(body.fullThreshold)));
+            if (body.tiltDeg !== undefined) next.tiltDeg = Math.max(0, Math.min(90, Number(body.tiltDeg)));
+            if (body.lowBattThreshold !== undefined) next.lowBattThreshold = Math.max(0, Math.min(100, Number(body.lowBattThreshold)));
+            if (body.defaultCostPerKm !== undefined) next.defaultCostPerKm = Math.max(1, Number(body.defaultCostPerKm));
+            if (body.routeEndPolicy !== undefined) next.routeEndPolicy = String(body.routeEndPolicy);
+            if (body.autoSchedulerEnabled !== undefined) next.autoSchedulerEnabled = Boolean(body.autoSchedulerEnabled);
+            adminPreferences = next;
+            saveAdminPreferences();
+            recomputeStoredFills();
+            return sendJson(res, 200, { ok: true, preferences: adminPreferences });
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message });
+        }
+    }
+
     // Latest state of every DF703 that has reported (one row per IMEI)
     if (req.method === 'GET' && pathname === '/api/df703/devices') {
         const devices = [...deviceState.values()]
-            .map(d => ({ ...d, settings: { binDepthMm: BIN_DEPTH_MM, ...deviceSettings[d.imei] }, connected: liveSockets.has(d.imei), pendingDownlinks: (downlinkQueue.get(d.imei) || []).length }))
+            .map(d => ({ ...d, settings: { binDepthMm: defaultBinDepthMm, ...deviceSettings[d.imei] }, connected: liveSockets.has(d.imei), pendingDownlinks: (downlinkQueue.get(d.imei) || []).length }))
             .sort((a, b) => String(b.lastSeenAt).localeCompare(String(a.lastSeenAt)));
         return sendJson(res, 200, { count: devices.length, devices });
     }
@@ -1015,6 +1103,7 @@ tcpServer.listen(TCP_PORT, HOST, () => {
     logDf703(`DF703 TCP listener on ${HOST}:${TCP_PORT} (set the sensor Server1 to YOUR_PUBLIC_IP;${TCP_PORT};)`);
 });
 
+loadAdminPreferences();
 loadDeviceSettings();
 loadPersistedPackets();
 

@@ -2060,33 +2060,56 @@
                                 <h3 class="font-display text-base font-bold text-main">When Should Safety Alerts Trigger?</h3>
                                 <div class="space-y-4 text-xs">
                                     <div>
-                                        <div class="flex justify-between mb-1">
-                                            <label for="sliderFireTemp" class="text-sub font-semibold">Fire / High-Heat Limit</label>
-                                            <strong id="setFireLbl" class="text-rose-500 font-bold">55&deg;C</strong>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <label for="sliderBinDepthCm" class="text-sub font-semibold">Bin Empty Distance / Depth (100 cm = 0% Full)</label>
+                                            <div class="flex items-center gap-1">
+                                                <input id="inputBinDepthCm" type="number" min="1" max="500" value="100" oninput="setCustomSettingFromInput('binDepthCm', this.value, 'sliderBinDepthCm')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
+                                                <strong id="setDepthLbl" class="text-[#06B6D4] font-bold">cm</strong>
+                                            </div>
                                         </div>
-                                        <input id="sliderFireTemp" type="range" min="5" max="90" value="55" class="parot-slider" style="--slider-fill-color: #E11D48;">
+                                        <input id="sliderBinDepthCm" type="range" min="10" max="250" value="100" class="parot-slider" style="--slider-fill-color: #06B6D4;">
+                                        <div class="text-[11px] text-dim mt-0.5">Formula: <code>Fill % = ((Depth - Distance) / Depth) &times; 100</code>. At 100 cm depth: 100 cm = 0%, 20 cm = 80%, 0 cm = 100%.</div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <label for="sliderFireTemp" class="text-sub font-semibold">Fire / High-Heat Limit (0&ndash;100&deg;C)</label>
+                                            <div class="flex items-center gap-1">
+                                                <input id="inputFireTemp" type="number" min="0" max="100" value="55" oninput="setCustomSettingFromInput('fireTemp', this.value, 'sliderFireTemp')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
+                                                <strong id="setFireLbl" class="text-rose-500 font-bold">55&deg;C</strong>
+                                            </div>
+                                        </div>
+                                        <input id="sliderFireTemp" type="range" min="0" max="100" value="55" class="parot-slider" style="--slider-fill-color: #E11D48;">
                                         <div class="text-[11px] text-dim" id="adminFireImpactHint">Currently flagging 1 bin(s) at or above 55&deg;C.</div>
                                     </div>
                                     <div>
-                                        <div class="flex justify-between mb-1">
-                                            <label for="sliderFullPct" class="text-sub font-semibold">Ready for Pickup Fill Limit</label>
-                                            <strong id="setFullLbl" style="color: var(--brand-strong);">80%</strong>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <label for="sliderFullPct" class="text-sub font-semibold">Ready for Pickup Fill Limit (0&ndash;100%)</label>
+                                            <div class="flex items-center gap-1">
+                                                <input id="inputFullPct" type="number" min="0" max="100" value="80" oninput="setCustomSettingFromInput('fullThreshold', this.value, 'sliderFullPct')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
+                                                <strong id="setFullLbl" style="color: var(--brand-strong);">80%</strong>
+                                            </div>
                                         </div>
-                                        <input id="sliderFullPct" type="range" min="60" max="95" value="80" class="parot-slider">
+                                        <input id="sliderFullPct" type="range" min="0" max="100" value="80" class="parot-slider">
                                     </div>
                                     <div>
-                                        <div class="flex justify-between mb-1">
-                                            <label for="sliderTiltDeg" class="text-sub font-semibold">Tilted Angle Limit</label>
-                                            <strong id="setTiltLbl" class="text-[#A78BFA] font-bold">35&deg;</strong>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <label for="sliderTiltDeg" class="text-sub font-semibold">Tilted Angle Limit (0&ndash;90&deg;)</label>
+                                            <div class="flex items-center gap-1">
+                                                <input id="inputTiltDeg" type="number" min="0" max="90" value="35" oninput="setCustomSettingFromInput('tiltDeg', this.value, 'sliderTiltDeg')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
+                                                <strong id="setTiltLbl" class="text-[#A78BFA] font-bold">35&deg;</strong>
+                                            </div>
                                         </div>
-                                        <input id="sliderTiltDeg" type="range" min="15" max="65" value="35" class="parot-slider" style="--slider-fill-color: #8B5CF6;">
+                                        <input id="sliderTiltDeg" type="range" min="0" max="90" value="35" class="parot-slider" style="--slider-fill-color: #8B5CF6;">
                                     </div>
                                     <div>
-                                        <div class="flex justify-between mb-1">
-                                            <label for="sliderLowBatt" class="text-sub font-semibold">Low Battery Warning</label>
-                                            <strong id="setBattLbl" class="text-amber-500 font-bold">35%</strong>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <label for="sliderLowBatt" class="text-sub font-semibold">Low Battery Warning (0&ndash;100%)</label>
+                                            <div class="flex items-center gap-1">
+                                                <input id="inputLowBatt" type="number" min="0" max="100" value="35" oninput="setCustomSettingFromInput('lowBattThreshold', this.value, 'sliderLowBatt')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
+                                                <strong id="setBattLbl" class="text-amber-500 font-bold">35%</strong>
+                                            </div>
                                         </div>
-                                        <input id="sliderLowBatt" type="range" min="10" max="45" value="35" class="parot-slider" style="--slider-fill-color: #D97706;">
+                                        <input id="sliderLowBatt" type="range" min="0" max="100" value="35" class="parot-slider" style="--slider-fill-color: #D97706;">
                                     </div>
                                 </div>
                             </div>
@@ -2385,6 +2408,7 @@
         let adminPickMode = 'depot';
 
         let settings = {
+            binDepthCm: 100,
             fullThreshold: 80,
             fireTemp: 55,
             tiltDeg: 35,
@@ -4423,6 +4447,17 @@
             showToast('Updated route return policy', 'success');
         }
 
+        function setCustomSettingFromInput(key, rawVal, sliderId) {
+            const val = Number(rawVal);
+            if (!Number.isFinite(val)) return;
+            const slider = document.getElementById(sliderId);
+            if (slider) {
+                slider.value = Math.max(Number(slider.min || 0), Math.min(Number(slider.max || 100), val));
+                syncSliderVars(slider);
+            }
+            updateSetting(key, val);
+        }
+
         function updateSetting(key, val) {
             settings[key] = val;
             document.getElementById('setFullLbl').innerText = `${settings.fullThreshold}%`;
@@ -4430,12 +4465,23 @@
             document.getElementById('setFireLbl').innerText = `${settings.fireTemp}°C`;
             document.getElementById('setTiltLbl').innerText = `${settings.tiltDeg}°`;
             document.getElementById('setBattLbl').innerText = `${settings.lowBattThreshold}%`;
+            const inpMap = {
+                binDepthCm: 'inputBinDepthCm',
+                fireTemp: 'inputFireTemp',
+                fullThreshold: 'inputFullPct',
+                tiltDeg: 'inputTiltDeg',
+                lowBattThreshold: 'inputLowBatt'
+            };
+            if (inpMap[key]) {
+                const inp = document.getElementById(inpMap[key]);
+                if (inp && Number(inp.value) !== val) inp.value = val;
+            }
             refreshMetricsAndLists();
             renderMapMarkers(activeFilter);
             renderBinsTable();
             renderSchedules();
             if (inspectedBin) inspectBin(inspectedBin);
-            persistAdminState();
+            persistAdminState(key === 'binDepthCm');
         }
 
         function applyWhiteLabel() {
@@ -4444,35 +4490,61 @@
             settings.defaultCostPerKm = +document.getElementById('adminDefaultCostKm').value || 14;
             document.getElementById('routeCostPerKm').value = settings.defaultCostPerKm;
             saveAdminLocations();
-            persistAdminState();
-            logPlatformStory('Saved Admin Preferences', `Saved platform branding, warehouse & recycling locations, and ${settings.fireTemp}°C safety threshold.`);
-            showToast('Saved all admin preferences', 'success');
+            persistAdminState(true);
+            logPlatformStory('Saved Admin Preferences', `Saved platform branding, warehouse & recycling locations, ${settings.binDepthCm || 100} cm bin depth, and ${settings.fireTemp}°C safety threshold.`);
+            showToast('Saved all admin preferences to database', 'success');
         }
 
-        function persistAdminState() {
+        let adminSaveTimer = null;
+        function persistAdminState(refreshLiveNow = false) {
             try {
                 localStorage.setItem('parot_admin_settings_v2', JSON.stringify({ settings, anchors: ZONE_ANCHORS }));
             } catch (e) {}
+            clearTimeout(adminSaveTimer);
+            adminSaveTimer = setTimeout(async () => {
+                try {
+                    await fetch('/api/admin/preferences', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(settings)
+                    });
+                    if (refreshLiveNow) pollLiveBackendSync(false);
+                } catch (e) {}
+            }, 220);
         }
 
-        function restoreAdminState() {
+        async function syncAdminPrefsFromServer() {
             try {
-                const raw = localStorage.getItem('parot_admin_settings_v2');
-                if (!raw) return;
-                const parsed = JSON.parse(raw);
-                if (parsed.settings) Object.assign(settings, parsed.settings);
-                if (parsed.anchors) ZONE_ANCHORS = parsed.anchors;
+                const res = await fetch('/api/admin/preferences');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data?.preferences) {
+                    Object.assign(settings, data.preferences);
+                    applyAdminSettingsToUi();
+                    refreshMetricsAndLists();
+                }
             } catch (e) {}
+        }
+
+        function applyAdminSettingsToUi() {
             const syncMap = [
-                ['sliderFireTemp', settings.fireTemp],
-                ['sliderFullPct', settings.fullThreshold],
-                ['sliderTiltDeg', settings.tiltDeg],
-                ['sliderLowBatt', settings.lowBattThreshold]
+                ['sliderBinDepthCm', settings.binDepthCm || 100, 'inputBinDepthCm'],
+                ['sliderFireTemp', settings.fireTemp, 'inputFireTemp'],
+                ['sliderFullPct', settings.fullThreshold, 'inputFullPct'],
+                ['sliderTiltDeg', settings.tiltDeg, 'inputTiltDeg'],
+                ['sliderLowBatt', settings.lowBattThreshold, 'inputLowBatt']
             ];
-            syncMap.forEach(([id, val]) => {
+            syncMap.forEach(([id, val, inpId]) => {
                 const el = document.getElementById(id);
                 if (el) { el.value = val; syncSliderVars(el); }
+                const inp = document.getElementById(inpId);
+                if (inp) inp.value = val;
             });
+            document.getElementById('setFullLbl').innerText = `${settings.fullThreshold}%`;
+            document.getElementById('kpiThresholdLbl').innerText = settings.fullThreshold;
+            document.getElementById('setFireLbl').innerText = `${settings.fireTemp}°C`;
+            document.getElementById('setTiltLbl').innerText = `${settings.tiltDeg}°`;
+            document.getElementById('setBattLbl').innerText = `${settings.lowBattThreshold}%`;
             const rad = document.querySelector(`input[name="routeEndPolicy"][value="${settings.routeEndPolicy}"]`);
             if (rad) rad.checked = true;
             document.getElementById('adminDefaultCostKm').value = settings.defaultCostPerKm;
@@ -4484,11 +4556,24 @@
             document.getElementById('autoSchedMasterToggle').checked = settings.autoSchedulerEnabled;
         }
 
+        function restoreAdminState() {
+            try {
+                const raw = localStorage.getItem('parot_admin_settings_v2');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.settings) Object.assign(settings, parsed.settings);
+                    if (parsed.anchors) ZONE_ANCHORS = parsed.anchors;
+                }
+            } catch (e) {}
+            applyAdminSettingsToUi();
+        }
+
         function resetAdminPreferences() {
             localStorage.removeItem('parot_admin_settings_v2');
             ZONE_ANCHORS = JSON.parse(JSON.stringify(DEFAULT_ZONE_ANCHORS));
-            settings = { fullThreshold: 80, fireTemp: 55, tiltDeg: 35, lowBattThreshold: 35, routeEndPolicy: 'round_trip', defaultCostPerKm: 14, autoSchedulerEnabled: true };
+            settings = { binDepthCm: 100, fullThreshold: 80, fireTemp: 55, tiltDeg: 35, lowBattThreshold: 35, routeEndPolicy: 'round_trip', defaultCostPerKm: 14, autoSchedulerEnabled: true };
             restoreAdminState();
+            updateSetting('binDepthCm', 100);
             updateSetting('fireTemp', 55);
             renderAdminLocMarkers();
             showToast('Restored factory admin defaults', 'info');
@@ -4640,6 +4725,7 @@
 
             // Sync sliders visually and functionally
             const sliderMap = {
+                sliderBinDepthCm: ['binDepthCm', (v) => { updateSetting('binDepthCm', v); logPlatformStory('Updated Bin Depth', `Bin empty distance calibrated to ${v} cm (100% = 0 cm, 0% = ${v} cm).`); }],
                 sliderFireTemp: ['fireTemp', (v) => { settings.fireTemp = v; updateSetting('fireTemp', v); logPlatformStory('Updated Fire Temp Rule', `Fire alert limit changed to ${v}°C. Re-evaluated all bins instantly.`); }],
                 sliderFullPct: ['fullThreshold', (v) => { updateSetting('fullThreshold', v); logPlatformStory('Updated Pickup Threshold', `Full bin trigger changed to ${v}%.`); }],
                 sliderTiltDeg: ['tiltDeg', (v) => { updateSetting('tiltDeg', v); }],
@@ -4670,7 +4756,7 @@
                 navigator.serviceWorker.register('/sw.js').catch(() => {});
             }
 
-            pollLiveBackendSync();
+            syncAdminPrefsFromServer().then(() => pollLiveBackendSync());
             setInterval(pollLiveBackendSync, 4000);
         });
     </script>
