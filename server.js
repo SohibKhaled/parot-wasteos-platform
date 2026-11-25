@@ -9,7 +9,18 @@ const RAW_PORT = Number(process.env.PORT) || 3005;
 const PORT = RAW_PORT === TCP_PORT ? 8080 : RAW_PORT;
 const HOST = '0.0.0.0';
 const ROOT_DIR = __dirname;
-const BIN_DEPTH_MM = 1200;
+// Default distance (mm) from the sensor face to the bin floor. Override per sensor with
+// POST /api/df703/devices/:imei/settings {"binDepthMm": 1100}, or globally with BIN_DEPTH_MM.
+const BIN_DEPTH_MM = Number(process.env.BIN_DEPTH_MM) || 1200;
+// The DF703 reports 0x270F (9999 mm) when the ultrasonic pulse gets no echo
+// (sensor tilted, lid open, nothing in range). That is "no reading", not an empty bin.
+const NO_ECHO_MIN_MM = 9000;
+// Battery: the DF703 reports voltage only. Its lithium (Li-SOCl2, 3.6 V) cell stays near
+// 3.5-3.6 V for most of its life and wobbles by tens of mV with load and temperature, so a
+// voltage->percent formula jumps around. We report a smoothed voltage and a coarse state.
+const BATT_LOW_V = Number(process.env.BATT_LOW_V) || 3.3;
+const BATT_CRITICAL_V = Number(process.env.BATT_CRITICAL_V) || 3.1;
+const BATT_SMOOTH_WINDOW = 5;
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -57,6 +68,9 @@ const SOCKET_IDLE_MS = (Number(process.env.DF703_SOCKET_IDLE_S) || 120) * 1000;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, 'data');
 const PACKETS_FILE = path.join(DATA_DIR, 'df703_packets.jsonl');
 const INGEST_TOKEN = process.env.INGEST_TOKEN || '';
+const DEVICE_SETTINGS_FILE = path.join(DATA_DIR, 'df703_device_settings.json');
+let deviceSettings = {};                 // imei -> { binDepthMm }
+const voltageHistory = new Map();        // imei -> last few battery voltages
 const MAX_STREAM_BUFFER = 4096;
 
 let packetSeq = 0;
@@ -76,6 +90,12 @@ function parseLittleEndianFloat(hex8) {
     const reversed = hex8.slice(6, 8) + hex8.slice(4, 6) + hex8.slice(2, 4) + hex8.slice(0, 2);
     const val = Buffer.from(reversed, 'hex').readFloatBE(0);
     return Number.isFinite(val) ? Number(val.toFixed(6)) : null;
+}
+
+/** Fill % from the measured distance; null when the sensor got no echo. */
+function computeFillPct(heightMm, depthMm) {
+    if (!(heightMm > 0 && heightMm < NO_ECHO_MIN_MM)) return null;
+    return Math.max(0, Math.min(100, Math.round(((depthMm - heightMm) / depthMm) * 100)));
 }
 
 /**
@@ -126,15 +146,17 @@ function parseDf703Packet(rawInput) {
 
         const battRaw = parseInt(cleaned.slice(off + 10, off + 14), 16);
         const voltageV = battRaw > 1000 ? +(battRaw / 1000).toFixed(2) : +(battRaw / 100).toFixed(2);
-        const batteryPct = Math.max(5, Math.min(100, Math.round(((voltageV - 3.0) / 0.7) * 100)));
 
         const rsrpRaw = parseLittleEndianFloat(cleaned.slice(off + 14, off + 22));
         const rsrp = rsrpRaw !== null ? Number(rsrpRaw.toFixed(1)) : null;
+        // Protocol examples: -650 -> -65.0 dBm, -907 -> -90.7 dBm (value is dBm x 10)
+        const rsrpDbm = rsrp === null ? null : Number((Math.abs(rsrp) > 200 ? rsrp / 10 : rsrp).toFixed(1));
         const frameCount = parseInt(cleaned.slice(off + 22, off + 26), 16);
         const timestampUnix = parseInt(cleaned.slice(off + 26, off + 34), 16);
         const deviceIdField = cleaned.slice(off + 34, cleaned.length - 2);
         const imei = (deviceIdField.length === 16 && deviceIdField.startsWith('1')) ? deviceIdField.slice(1) : deviceIdField;
-        const fillPct = Math.max(0, Math.min(100, Math.round(((BIN_DEPTH_MM - heightMm) / BIN_DEPTH_MM) * 100)));
+        const heightValid = heightMm > 0 && heightMm < NO_ECHO_MIN_MM;
+        const fillPct = computeFillPct(heightMm, BIN_DEPTH_MM);
 
         return {
             protocol: 'Dingtek DF703 4G V2.8',
@@ -146,7 +168,9 @@ function parseDf703Packet(rawInput) {
             packetSizeBytes,
             imei,
             heightMm,
-            heightCm: +(heightMm / 10).toFixed(1),
+            heightCm: heightValid ? +(heightMm / 10).toFixed(1) : null,
+            heightValid,
+            binDepthMm: BIN_DEPTH_MM,
             fillPct,
             hasGps,
             longitude,
@@ -162,8 +186,8 @@ function parseDf703Packet(rawInput) {
                 rawStatus: statusCode
             },
             voltageV,
-            batteryPct,
             rsrp,
+            rsrpDbm,
             frameCount,
             timestampUnix,
             timestampIso: new Date(timestampUnix * 1000).toISOString(),
@@ -349,11 +373,15 @@ function buildDashboardView(parsed) {
         reportType: parsed.reportType,
         fillPct: parsed.fillPct,
         heightMm: parsed.heightMm,
+        heightValid: parsed.heightValid,
+        binDepthMm: parsed.binDepthMm,
         temperatureC: parsed.tempC,
         tiltAngleDeg: parsed.fallAngleDeg,
-        batteryPct: parsed.batteryPct,
         voltageV: parsed.voltageV,
+        batteryVoltageAvg: parsed.batteryVoltageAvg,
+        batteryState: parsed.batteryState,
         rsrp: parsed.rsrp,
+        rsrpDbm: parsed.rsrpDbm,
         latitude: parsed.latitude,
         longitude: parsed.longitude,
         alarms: parsed.alarms
@@ -396,11 +424,58 @@ function addEntryToMemory(entry) {
         fill: entry.fillPct ?? null,
         temp: entry.tempC ?? entry.tempThresholdC ?? null,
         angle: entry.fallAngleDeg ?? entry.angleThresholdDeg ?? null,
-        battery: entry.batteryPct ?? null
+        battery: entry.batteryVoltageAvg ?? entry.voltageV ?? null
     });
     if (telemetryLog.length > 200) telemetryLog.pop();
 
+    if (typeof entry.voltageV === 'number') {
+        const hist = voltageHistory.get(entry.imei) || [];
+        hist.push(entry.voltageV);
+        if (hist.length > BATT_SMOOTH_WINDOW) hist.shift();
+        voltageHistory.set(entry.imei, hist);
+    }
     updateDeviceState(entry);
+}
+
+function median(values) {
+    const v = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(v.length / 2);
+    return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
+/**
+ * Add per-sensor context to a freshly decoded reading: the bin depth configured for this
+ * IMEI (fill %), and a smoothed battery voltage + state over the last few readings.
+ */
+function enrichReading(parsed) {
+    if (parsed.reportType !== '01' && parsed.reportType !== '02') return parsed;
+    const depth = Number(deviceSettings[parsed.imei]?.binDepthMm) || BIN_DEPTH_MM;
+    const recent = [...(voltageHistory.get(parsed.imei) || []), parsed.voltageV]
+        .filter(v => typeof v === 'number').slice(-BATT_SMOOTH_WINDOW);
+    const avg = recent.length ? Number(median(recent).toFixed(2)) : null;
+    let batteryState = 'unknown';
+    if (avg !== null) batteryState = avg < BATT_CRITICAL_V ? 'critical' : avg < BATT_LOW_V ? 'low' : 'good';
+    if (parsed.alarms?.lowBattery && batteryState === 'good') batteryState = 'low';
+    return {
+        ...parsed,
+        binDepthMm: depth,
+        fillPct: computeFillPct(parsed.heightMm, depth),
+        batteryVoltageAvg: avg,
+        batteryState
+    };
+}
+
+function loadDeviceSettings() {
+    try {
+        if (fs.existsSync(DEVICE_SETTINGS_FILE)) deviceSettings = JSON.parse(fs.readFileSync(DEVICE_SETTINGS_FILE, 'utf8')) || {};
+    } catch (err) {
+        logDf703('WARN could not load device settings:', err.message);
+    }
+}
+
+function saveDeviceSettings() {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DEVICE_SETTINGS_FILE, JSON.stringify(deviceSettings, null, 2));
 }
 
 /**
@@ -423,7 +498,8 @@ function loadPersistedPackets() {
     }
 }
 
-function recordParsedDf703(parsed, sourceChannel, meta = {}) {
+function recordParsedDf703(rawParsed, sourceChannel, meta = {}) {
+    const parsed = enrichReading(rawParsed);
     const expectedChars = (parsed.packetSizeBytes || 0) * 2;
     const entry = {
         id: ++packetSeq,
@@ -489,7 +565,13 @@ function createDf703Framer() {
             if (binaryMode) {
                 frameLen = parseInt(buffer.slice(8, 10), 16) * 2;
             } else if (type === '01' || type === '02') {
-                frameLen = buffer.slice(14, 16) === '01' ? 84 : 68;
+                // 16-char device ID ("1"+IMEI, per the PDF) or a bare 15-digit IMEI (AIR780 firmware)
+                // Decide only once the char after the shorter frame is visible, so a long frame
+                // whose IMEI happens to end in "81" is not cut early.
+                const full = buffer.slice(14, 16) === '01' ? 84 : 68;
+                if (buffer.length < full) break; // wait for more data
+                const up = buffer.slice(0, full).toUpperCase();
+                frameLen = up.endsWith('81') ? full : up.slice(0, full - 1).endsWith('81') ? full - 1 : full;
             } else {
                 const t3 = buffer.match(TYPE03_RE);
                 if (t3) frameLen = t3[0].length;
@@ -658,9 +740,28 @@ const server = http.createServer(async (req, res) => {
     // Latest state of every DF703 that has reported (one row per IMEI)
     if (req.method === 'GET' && pathname === '/api/df703/devices') {
         const devices = [...deviceState.values()]
-            .map(d => ({ ...d, connected: liveSockets.has(d.imei), pendingDownlinks: (downlinkQueue.get(d.imei) || []).length }))
+            .map(d => ({ ...d, settings: { binDepthMm: BIN_DEPTH_MM, ...deviceSettings[d.imei] }, connected: liveSockets.has(d.imei), pendingDownlinks: (downlinkQueue.get(d.imei) || []).length }))
             .sort((a, b) => String(b.lastSeenAt).localeCompare(String(a.lastSeenAt)));
         return sendJson(res, 200, { count: devices.length, devices });
+    }
+    // Per-sensor settings, e.g. the bin depth used for fill % (persisted in DATA_DIR)
+    const settingsMatch = req.method === 'POST' && pathname.match(/^\/api\/df703\/devices\/(\d{6,20})\/settings$/);
+    if (settingsMatch) {
+        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' });
+        try {
+            const imei = settingsMatch[1];
+            const body = await readJsonBody(req);
+            const depth = Number(body.binDepthMm);
+            if (!Number.isFinite(depth) || depth < 200 || depth > 5000) {
+                return sendJson(res, 400, { error: 'binDepthMm must be a number between 200 and 5000' });
+            }
+            deviceSettings[imei] = { ...deviceSettings[imei], binDepthMm: Math.round(depth) };
+            saveDeviceSettings();
+            logDf703(`Settings for ${imei}: bin depth ${deviceSettings[imei].binDepthMm} mm`);
+            return sendJson(res, 200, { imei, settings: deviceSettings[imei] });
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message });
+        }
     }
     const devMatch = req.method === 'GET' && pathname.match(/^\/api\/df703\/devices\/(\d{6,20})$/);
     if (devMatch) {
@@ -914,6 +1015,7 @@ tcpServer.listen(TCP_PORT, HOST, () => {
     logDf703(`DF703 TCP listener on ${HOST}:${TCP_PORT} (set the sensor Server1 to YOUR_PUBLIC_IP;${TCP_PORT};)`);
 });
 
+loadDeviceSettings();
 loadPersistedPackets();
 
 server.on('error', (err) => {

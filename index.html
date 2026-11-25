@@ -2720,10 +2720,20 @@
             return { label: 'Fair', cls: 'text-amber-500' };
         }
 
-        function isBinFire(b) { return b.temp >= settings.fireTemp; }
-        function isBinTilted(b) { return b.angle >= settings.tiltDeg; }
+        // Live DF703 bins also honour the alarm bits the sensor itself sends (status field).
+        function isBinFire(b) { return b.temp >= settings.fireTemp || !!b.deviceAlarms?.fire; }
+        function isBinTilted(b) { return b.angle >= settings.tiltDeg || !!b.deviceAlarms?.fall; }
         function isBinFull(b) { return b.fill >= settings.fullThreshold; }
-        function isBinLowBatt(b) { return b.battery < settings.lowBattThreshold; }
+        function isBinLowBatt(b) {
+            if (b.batteryState) return b.batteryState === 'low' || b.batteryState === 'critical';
+            return b.battery < settings.lowBattThreshold;
+        }
+        // DF703 reports battery voltage only; show smoothed voltage + state instead of a fake %.
+        const BATTERY_STATE_LABEL = { good: 'Good', low: 'Low', critical: 'Replace', unknown: '--' };
+        function batteryText(b) {
+            if (!b.batteryState) return `${b.battery}%`;
+            return `${BATTERY_STATE_LABEL[b.batteryState] || b.batteryState} (${b.voltageV ?? '--'}V)`;
+        }
 
         function generateBins() {
             const mAnchors = ZONE_ANCHORS.madinaty.streets;
@@ -2841,7 +2851,7 @@
                 const sig = signalQualityLabel(b.rssi);
                 const m = L.marker([b.lat, b.lng], { icon: buildBinSvgIcon(b) });
                 m.on('click', () => inspectBin(b));
-                m.bindPopup(`<div style="min-width:185px;font-size:12.5px;line-height:1.5"><b>${b.name}</b><br/><span style="color:var(--text-sub)">Fill: <b>${b.fill}%</b> &bull; Heat: <b>${b.temp}&deg;C</b><br/>Signal: <b>${sig.label}</b> &bull; Batt: <b>${b.battery}%</b></span></div>`);
+                m.bindPopup(`<div style="min-width:185px;font-size:12.5px;line-height:1.5"><b>${b.name}</b><br/><span style="color:var(--text-sub)">Fill: <b>${b.fill}%</b> &bull; Heat: <b>${b.temp}&deg;C</b><br/>Signal: <b>${sig.label}</b> &bull; Batt: <b>${batteryText(b)}</b></span></div>`);
                 m.addTo(markersLayer);
             });
             renderDashListView(list);
@@ -2855,7 +2865,7 @@
                 return `<button type="button" onclick="inspectBinById(${b.id})" class="soft-well p-3.5 text-start hover:opacity-90 transition flex items-center justify-between gap-2">
                     <div class="min-w-0">
                         <div class="font-bold text-xs text-main truncate">${b.name}</div>
-                        <div class="text-[11px] text-sub mt-0.5">${b.temp}&deg;C &bull; ${b.battery}% Battery &bull; ${signalQualityLabel(b.rssi).label}</div>
+                        <div class="text-[11px] text-sub mt-0.5">${b.temp}&deg;C &bull; Battery ${batteryText(b)} &bull; ${signalQualityLabel(b.rssi).label}</div>
                     </div>
                     <span class="font-display font-bold text-sm ${cls} shrink-0">${b.fill}%</span>
                 </button>`;
@@ -2885,7 +2895,7 @@
             document.getElementById('inspTilt').innerText = isBinTilted(b) ? (isAr ? `مائلة (${b.angle}°)` : `Tipped (${b.angle}°)`) : (isAr ? 'مستقيمة' : 'Upright');
             const sig = signalQualityLabel(b.rssi);
             const sigLabel = isAr ? (sig.label === 'Strong' ? 'قوية' : sig.label === 'Good' ? 'جيدة' : 'مقبولة') : sig.label;
-            document.getElementById('inspSig').innerText = `${sigLabel} • ${b.battery}%`;
+            document.getElementById('inspSig').innerText = `${sigLabel} • ${batteryText(b)}`;
 
             const badge = document.getElementById('inspStatusBadge');
             const whyEl = document.getElementById('inspWhyText');
@@ -2907,8 +2917,8 @@
             } else {
                 badge.innerText = isAr ? 'سليمة' : 'Healthy'; badge.className = 'px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[11px] font-bold';
                 whyEl.innerText = isAr
-                    ? `امتلاء طبيعي (${b.fill}%) وحرارة آمنة (${b.temp}°C < ${settings.fireTemp}°C) وبطارية قوية (${b.battery}%).`
-                    : `Normal fill (${b.fill}%), cool temperature (${b.temp}°C < ${settings.fireTemp}°C), upright (${b.angle}°), and strong battery (${b.battery}%).`;
+                    ? `امتلاء طبيعي (${b.fill}%) وحرارة آمنة (${b.temp}°C < ${settings.fireTemp}°C) وبطارية قوية (${batteryText(b)}).`
+                    : `Normal fill (${b.fill}%), cool temperature (${b.temp}°C < ${settings.fireTemp}°C), upright (${b.angle}°), and strong battery (${batteryText(b)}).`;
             }
         }
 
@@ -2970,7 +2980,7 @@
                 makeGroup(`Fire & High Heat (>= ${settings.fireTemp}°C)`, 'Triggered automatically when heat exceeds Admin Temperature Limit.', 'bg-rose-500/15 text-rose-500', 'fa-solid fa-fire', fires, b => `Heat ${b.temp}°C • Fill ${b.fill}%`) +
                 makeGroup(`Tipped Over (>= ${settings.tiltDeg}°)`, 'Triggered when bin leans past your safe upright tilt angle.', 'bg-[#8B5CF6]/15 text-[#A78BFA]', 'fa-solid fa-person-falling-burst', tilts, b => `Tilted ${b.angle}° • Fill ${b.fill}%`) +
                 makeGroup(`Full & Ready (>= ${settings.fullThreshold}%)`, 'Scheduled automatically onto next driver pickup loop.', 'bg-amber-500/15 text-amber-500', 'fa-solid fa-fill-drip', fulls, b => `Fill level ${b.fill}%`) +
-                makeGroup(`Low Battery (< ${settings.lowBattThreshold}%)`, 'Sensors needing maintenance battery swap soon.', 'bg-[#06B6D4]/15 text-[#06B6D4]', 'fa-solid fa-battery-quarter', batts, b => `Battery remaining: ${b.battery}%`);
+                makeGroup(`Low Battery (< ${settings.lowBattThreshold}%)`, 'Sensors needing maintenance battery swap soon.', 'bg-[#06B6D4]/15 text-[#06B6D4]', 'fa-solid fa-battery-quarter', batts, b => `Battery: ${batteryText(b)}`);
         }
 
         function refreshMetricsAndLists() {
@@ -3117,7 +3127,7 @@
                     <td class="${isBinFire(b) ? 'text-rose-500 font-bold' : ''}">${b.temp}&deg;C</td>
                     <td>${pos}</td>
                     <td class="font-semibold ${sig.cls}">${sig.label}</td>
-                    <td>${b.battery}%</td>
+                    <td>${batteryText(b)}</td>
                     <td class="text-dim">${b.lastSeen} min ago</td>
                 </tr>`;
             }).join('') || '<tr><td colspan="8" class="text-center text-dim py-6">No smart bins match this filter.</td></tr>';
@@ -3131,7 +3141,7 @@
             document.getElementById('healthTableBody').innerHTML = s.slice(0, 35).map(b => {
                 const sig = signalQualityLabel(b.rssi);
                 const st = isBinFire(b) ? '<span class="text-rose-500 font-bold">High Heat</span>' : isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tipped Over</span>' : isBinLowBatt(b) ? '<span class="text-amber-500 font-bold">Low Battery</span>' : '<span class="text-emerald-500 font-bold">Healthy</span>';
-                return `<tr><td class="font-bold text-main">${b.name}</td><td>${b.category}</td><td class="${sig.cls} font-semibold">${sig.label} (${b.rssi} dBm)</td><td>${b.battery}%</td><td>${b.temp}&deg;C</td><td>${st}</td></tr>`;
+                return `<tr><td class="font-bold text-main">${b.name}</td><td>${b.category}</td><td class="${sig.cls} font-semibold">${sig.label} (${b.rssi} dBm)</td><td>${batteryText(b)}</td><td>${b.temp}&deg;C</td><td>${st}</td></tr>`;
             }).join('');
         }
 
@@ -3147,7 +3157,7 @@
         }
 
         function exportBinsCsv() {
-            const rows = ['Bin,Street,Fill%,TempC,Position,Signal,Battery%', ...getScopedBins().map(b => `${b.code},"${b.street}",${b.fill},${b.temp},${isBinTilted(b) ? 'Tipped' : 'Upright'},${signalQualityLabel(b.rssi).label},${b.battery}`)];
+            const rows = ['Bin,Street,Fill%,TempC,Position,Signal,Battery', ...getScopedBins().map(b => `${b.code},"${b.street}",${b.fill},${b.temp},${isBinTilted(b) ? 'Tipped' : 'Upright'},${signalQualityLabel(b.rssi).label},"${batteryText(b)}"`)];
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
             a.download = 'parot-smart-bins-report.csv'; a.click();
@@ -3841,8 +3851,10 @@
             }
 
             const pct = Math.max(0, Math.min(100, Number(liveBin.fill || 0)));
-            if (fillVal) fillVal.innerText = `${pct}%`;
-            if (distLbl) distLbl.innerText = liveBin.heightCm != null ? `${liveBin.heightCm} cm` : '-- cm';
+            if (fillVal) fillVal.innerText = liveBin.noEcho ? `${pct}%*` : `${pct}%`;
+            if (distLbl) distLbl.innerText = liveBin.noEcho
+                ? 'No echo (last valid reading)'
+                : (liveBin.heightCm != null ? `${liveBin.heightCm} cm` : '-- cm');
             if (fillBar) {
                 fillBar.style.width = `${pct}%`;
                 fillBar.style.background = pct >= settings.fullThreshold ? '#E11D48' : pct >= 50 ? '#D97706' : '#10B981';
@@ -3860,8 +3872,8 @@
             }
             if (angleNote) angleNote.innerText = isBinTilted(liveBin) ? 'TIPPED OVER' : `Upright (< ${settings.tiltDeg}°)`;
 
-            if (battVal) battVal.innerText = `${liveBin.battery}%`;
-            if (voltNote) voltNote.innerText = liveBin.voltageV ? `${liveBin.voltageV} V` : 'Nominal 3.6 V';
+            if (battVal) battVal.innerText = liveBin.batteryState ? (BATTERY_STATE_LABEL[liveBin.batteryState] || '--') : `${liveBin.battery}%`;
+            if (voltNote) voltNote.innerText = liveBin.voltageV ? `${liveBin.voltageV} V (avg of last readings)` : 'Nominal 3.6 V';
 
             const sig = signalQualityLabel(liveBin.rssi || -65);
             if (sigVal) {
@@ -3884,10 +3896,16 @@
                     : p.reportType === '02'
                     ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold">0x02 Heartbeat</span>'
                     : '<span class="px-2 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-[10px] font-bold">0x03 Config</span>';
-                const fillCell = typeof p.fillPct === 'number' ? `<span class="font-bold">${p.fillPct}%</span> <span class="text-dim">(${p.heightCm ?? '--'} cm)</span>` : '<span class="text-dim">Config</span>';
+                const isTelemetry = p.reportType === '01' || p.reportType === '02';
+                const noEcho = isTelemetry && (p.heightValid === false || p.heightMm >= 9000);
+                const fillCell = noEcho
+                    ? '<span class="text-amber-500 font-bold">No echo</span> <span class="text-dim">(sensor got no reading)</span>'
+                    : typeof p.fillPct === 'number' ? `<span class="font-bold">${p.fillPct}%</span> <span class="text-dim">(${p.heightCm ?? '--'} cm)</span>` : '<span class="text-dim">Config</span>';
                 const tempCell = typeof p.tempC === 'number' ? `${p.tempC}&deg;C` : '--';
                 const tiltCell = typeof p.fallAngleDeg === 'number' ? `${p.fallAngleDeg}&deg;` : '--';
-                const battCell = typeof p.batteryPct === 'number' ? `${p.batteryPct}% (${p.voltageV ?? '--'}V)` : '--';
+                const battCell = typeof p.voltageV === 'number'
+                    ? `${p.voltageV}V${p.batteryState ? ` <span class="text-dim">&bull; ${BATTERY_STATE_LABEL[p.batteryState] || p.batteryState}</span>` : ''}`
+                    : '--';
                 return `<tr>
                     <td class="font-mono text-dim">#${p.id ?? ''}</td>
                     <td class="text-sub whitespace-nowrap">${t}</td>
@@ -3950,17 +3968,30 @@
                             bins.push(target);
                         }
                         const latestForImei = pkts.find(x => x.imei === p.imei && (x.reportType === '01' || x.reportType === '02')) || p;
-                        if (typeof latestForImei.fillPct === 'number') target.fill = latestForImei.fillPct;
-                        if (typeof latestForImei.heightCm === 'number') target.heightCm = latestForImei.heightCm;
-                        if (typeof latestForImei.tempC === 'number') target.temp = latestForImei.tempC;
-                        if (typeof latestForImei.batteryPct === 'number') target.battery = latestForImei.batteryPct;
-                        if (typeof latestForImei.voltageV === 'number') target.voltageV = latestForImei.voltageV;
-                        if (typeof latestForImei.fallAngleDeg === 'number') target.angle = latestForImei.fallAngleDeg;
-                        if (typeof latestForImei.rsrp === 'number' && latestForImei.rsrp < 0) target.rssi = latestForImei.rsrp;
+                        const L = latestForImei;
+                        // 9999 mm = no ultrasonic echo: keep the last valid fill, flag it instead of showing 0%
+                        const lNoEcho = L.heightValid === false || L.heightMm >= 9000;
+                        target.noEcho = (L.reportType === '01' || L.reportType === '02') && lNoEcho;
+                        const lastValid = pkts.find(x => x.imei === p.imei && (x.reportType === '01' || x.reportType === '02')
+                            && x.heightValid !== false && x.heightMm < 9000 && typeof x.fillPct === 'number');
+                        if (lastValid) target.fill = lastValid.fillPct;
+                        if (lastValid && typeof lastValid.heightCm === 'number') target.heightCm = lastValid.heightCm;
+                        if (typeof L.tempC === 'number') target.temp = L.tempC;
+                        if (typeof L.fallAngleDeg === 'number') target.angle = L.fallAngleDeg;
+                        if (typeof (L.batteryVoltageAvg ?? L.voltageV) === 'number') target.voltageV = L.batteryVoltageAvg ?? L.voltageV;
+                        if (L.batteryState) {
+                            target.batteryState = L.batteryState;
+                            target.battery = { good: 100, low: 20, critical: 5 }[L.batteryState] ?? target.battery;
+                        }
+                        const dbm = typeof L.rsrpDbm === 'number' ? L.rsrpDbm
+                            : typeof L.rsrp === 'number' ? (Math.abs(L.rsrp) > 200 ? L.rsrp / 10 : L.rsrp) : null;
+                        if (dbm !== null && dbm < 0) target.rssi = Math.round(dbm);
+                        if (L.alarms) target.deviceAlarms = L.alarms;
                         target.lastSeen = 0;
                     });
                     latestTelemetry = pkts.find(p => p.reportType === '01' || p.reportType === '02') || pkts[0];
                     refreshMetricsAndLists();
+                    if (map && typeof renderMapMarkers === 'function') renderMapMarkers(activeFilter);
                 }
                 renderLiveSensorCard(latestTelemetry, pkts.length);
                 if (manual) showToast(`Synced ${pkts.length} live packet${pkts.length === 1 ? '' : 's'}`, 'success');
@@ -4111,7 +4142,7 @@
             const title = document.getElementById('apiPreviewTitle');
             if (ep === 'bins') {
                 title.innerText = 'Live Bin Status Data';
-                pre.innerText = JSON.stringify({ workspace: currentTenant, bins_online: getScopedBins().length, sample: getScopedBins().slice(0, 2).map(b => ({ bin: b.code, fill: b.fill + '%', temp: b.temp + '°C', position: isBinTilted(b) ? 'Tipped' : 'Upright', battery: b.battery + '%' })) }, null, 2);
+                pre.innerText = JSON.stringify({ workspace: currentTenant, bins_online: getScopedBins().length, sample: getScopedBins().slice(0, 2).map(b => ({ bin: b.code, fill: b.fill + '%', temp: b.temp + '°C', position: isBinTilted(b) ? 'Tipped' : 'Upright', battery: batteryText(b) })) }, null, 2);
             } else if (ep === 'alarms') {
                 title.innerText = 'Active Safety Notices';
                 pre.innerText = JSON.stringify({ workspace: currentTenant, fire_limit_c: settings.fireTemp, warnings: getScopedBins().filter(b => isBinFire(b) || isBinTilted(b)).map(b => ({ bin: b.code, issue: isBinFire(b) ? 'High Heat' : 'Tipped Over' })) }, null, 2);

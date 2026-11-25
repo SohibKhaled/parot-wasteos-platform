@@ -27,6 +27,16 @@ Enterprise IoT platform built with **Node.js backend** and **zero-pixelation Vec
 | `GET/POST` | `/api/driver/gps` | Track driver GPS compliance & route deviations |
 | `GET` | `/api/export/history.csv` | Download 90-day Excel-ready history CSV |
 | `GET/POST` | `/api/backup/snapshot`, `/restore` | Export or verify <1-hour Disaster Recovery snapshots |
+| `GET` | `/api/df703/devices` | Latest state of every DF703 that reported |
+| `POST` | `/api/df703/devices/:imei/settings` | Set a sensor's bin depth, e.g. `{"binDepthMm": 1100}` (used for fill %) |
+
+### How DF703 readings are interpreted
+
+- **Fill %** = `(binDepthMm - distance) / binDepthMm`. Default depth `BIN_DEPTH_MM` (1200 mm); set the real depth per sensor with the settings endpoint above.
+- **No echo:** a distance of `9999 mm` (`0x270F`) means the ultrasonic pulse got no echo (sensor tilted, lid open, nothing in range). It is shown as "No echo", not 0%, and the bin keeps its last valid fill.
+- **Battery:** the sensor reports voltage only. The platform shows the median of the last 5 readings plus a state: `good`, `low` (< `BATT_LOW_V`, default 3.3 V, or the sensor's own low-battery bit) or `critical` (< `BATT_CRITICAL_V`, default 3.1 V).
+- **Signal:** RSRP arrives as dBm x 10 (`-650` = -65.0 dBm) and is exposed as `rsrpDbm`.
+- **Alarms:** the sensor's own fire / fall bits also raise the dashboard alerts.
 
 ---
 
