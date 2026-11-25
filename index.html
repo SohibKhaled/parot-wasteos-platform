@@ -2061,17 +2061,6 @@
                                 <div class="space-y-4 text-xs">
                                     <div>
                                         <div class="flex items-center justify-between gap-2 mb-1">
-                                            <label for="sliderBinDepthCm" class="text-sub font-semibold">Bin Empty Distance / Depth (100 cm = 0% Full)</label>
-                                            <div class="flex items-center gap-1">
-                                                <input id="inputBinDepthCm" type="number" min="1" max="500" value="100" oninput="setCustomSettingFromInput('binDepthCm', this.value, 'sliderBinDepthCm')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
-                                                <strong id="setDepthLbl" class="text-[#06B6D4] font-bold">cm</strong>
-                                            </div>
-                                        </div>
-                                        <input id="sliderBinDepthCm" type="range" min="10" max="250" value="100" class="parot-slider" style="--slider-fill-color: #06B6D4;">
-                                        <div class="text-[11px] text-dim mt-0.5">Formula: <code>Fill % = ((Depth - Distance) / Depth) &times; 100</code>. At 100 cm depth: 100 cm = 0%, 20 cm = 80%, 0 cm = 100%.</div>
-                                    </div>
-                                    <div>
-                                        <div class="flex items-center justify-between gap-2 mb-1">
                                             <label for="sliderFireTemp" class="text-sub font-semibold">Fire / High-Heat Limit (0&ndash;100&deg;C)</label>
                                             <div class="flex items-center gap-1">
                                                 <input id="inputFireTemp" type="number" min="0" max="100" value="55" oninput="setCustomSettingFromInput('fireTemp', this.value, 'sliderFireTemp')" class="apple-input w-16 px-2 py-0.5 text-xs font-bold text-end">
@@ -2408,7 +2397,6 @@
         let adminPickMode = 'depot';
 
         let settings = {
-            binDepthCm: 100,
             fullThreshold: 80,
             fireTemp: 55,
             tiltDeg: 35,
@@ -4466,7 +4454,6 @@
             document.getElementById('setTiltLbl').innerText = `${settings.tiltDeg}°`;
             document.getElementById('setBattLbl').innerText = `${settings.lowBattThreshold}%`;
             const inpMap = {
-                binDepthCm: 'inputBinDepthCm',
                 fireTemp: 'inputFireTemp',
                 fullThreshold: 'inputFullPct',
                 tiltDeg: 'inputTiltDeg',
@@ -4481,7 +4468,7 @@
             renderBinsTable();
             renderSchedules();
             if (inspectedBin) inspectBin(inspectedBin);
-            persistAdminState(key === 'binDepthCm');
+            persistAdminState();
         }
 
         function applyWhiteLabel() {
@@ -4490,13 +4477,13 @@
             settings.defaultCostPerKm = +document.getElementById('adminDefaultCostKm').value || 14;
             document.getElementById('routeCostPerKm').value = settings.defaultCostPerKm;
             saveAdminLocations();
-            persistAdminState(true);
-            logPlatformStory('Saved Admin Preferences', `Saved platform branding, warehouse & recycling locations, ${settings.binDepthCm || 100} cm bin depth, and ${settings.fireTemp}°C safety threshold.`);
+            persistAdminState();
+            logPlatformStory('Saved Admin Preferences', `Saved platform branding, warehouse & recycling locations, and ${settings.fireTemp}°C safety threshold.`);
             showToast('Saved all admin preferences to database', 'success');
         }
 
         let adminSaveTimer = null;
-        function persistAdminState(refreshLiveNow = false) {
+        function persistAdminState() {
             try {
                 localStorage.setItem('parot_admin_settings_v2', JSON.stringify({ settings, anchors: ZONE_ANCHORS }));
             } catch (e) {}
@@ -4508,7 +4495,6 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(settings)
                     });
-                    if (refreshLiveNow) pollLiveBackendSync(false);
                 } catch (e) {}
             }, 220);
         }
@@ -4528,7 +4514,6 @@
 
         function applyAdminSettingsToUi() {
             const syncMap = [
-                ['sliderBinDepthCm', settings.binDepthCm || 100, 'inputBinDepthCm'],
                 ['sliderFireTemp', settings.fireTemp, 'inputFireTemp'],
                 ['sliderFullPct', settings.fullThreshold, 'inputFullPct'],
                 ['sliderTiltDeg', settings.tiltDeg, 'inputTiltDeg'],
@@ -4571,9 +4556,8 @@
         function resetAdminPreferences() {
             localStorage.removeItem('parot_admin_settings_v2');
             ZONE_ANCHORS = JSON.parse(JSON.stringify(DEFAULT_ZONE_ANCHORS));
-            settings = { binDepthCm: 100, fullThreshold: 80, fireTemp: 55, tiltDeg: 35, lowBattThreshold: 35, routeEndPolicy: 'round_trip', defaultCostPerKm: 14, autoSchedulerEnabled: true };
+            settings = { fullThreshold: 80, fireTemp: 55, tiltDeg: 35, lowBattThreshold: 35, routeEndPolicy: 'round_trip', defaultCostPerKm: 14, autoSchedulerEnabled: true };
             restoreAdminState();
-            updateSetting('binDepthCm', 100);
             updateSetting('fireTemp', 55);
             renderAdminLocMarkers();
             showToast('Restored factory admin defaults', 'info');
@@ -4725,7 +4709,6 @@
 
             // Sync sliders visually and functionally
             const sliderMap = {
-                sliderBinDepthCm: ['binDepthCm', (v) => { updateSetting('binDepthCm', v); logPlatformStory('Updated Bin Depth', `Bin empty distance calibrated to ${v} cm (100% = 0 cm, 0% = ${v} cm).`); }],
                 sliderFireTemp: ['fireTemp', (v) => { settings.fireTemp = v; updateSetting('fireTemp', v); logPlatformStory('Updated Fire Temp Rule', `Fire alert limit changed to ${v}°C. Re-evaluated all bins instantly.`); }],
                 sliderFullPct: ['fullThreshold', (v) => { updateSetting('fullThreshold', v); logPlatformStory('Updated Pickup Threshold', `Full bin trigger changed to ${v}%.`); }],
                 sliderTiltDeg: ['tiltDeg', (v) => { updateSetting('tiltDeg', v); }],

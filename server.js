@@ -9,9 +9,8 @@ const RAW_PORT = Number(process.env.PORT) || 3005;
 const PORT = RAW_PORT === TCP_PORT ? 8080 : RAW_PORT;
 const HOST = '0.0.0.0';
 const ROOT_DIR = __dirname;
-// Default distance (mm) from the sensor face to the bin floor (1000 mm = 100 cm -> 0% full).
-// Override per sensor with POST /api/df703/devices/:imei/settings {"binDepthMm": 1000}, or via Admin Preferences.
-let defaultBinDepthMm = Number(process.env.BIN_DEPTH_MM) || 1000;
+// Fixed sensor distance calibration (1000 mm = 100 cm -> 0% full, 20 cm -> 80% full, 0 cm -> 100% full).
+const defaultBinDepthMm = Number(process.env.BIN_DEPTH_MM) || 1000;
 const BIN_DEPTH_MM = defaultBinDepthMm;
 // The DF703 reports 0x270F (9999 mm) when the ultrasonic pulse gets no echo
 // (sensor tilted, lid open, nothing in range). That is "no reading", not an empty bin.
@@ -73,7 +72,6 @@ const DEVICE_SETTINGS_FILE = path.join(DATA_DIR, 'df703_device_settings.json');
 const ADMIN_PREFS_FILE = path.join(DATA_DIR, 'admin_preferences.json');
 let deviceSettings = {};                 // imei -> { binDepthMm }
 let adminPreferences = {
-    binDepthCm: Math.round(defaultBinDepthMm / 10),
     fireTemp: 55,
     fullThreshold: 80,
     tiltDeg: 35,
@@ -495,10 +493,8 @@ function loadAdminPreferences() {
         if (fs.existsSync(ADMIN_PREFS_FILE)) {
             const loaded = JSON.parse(fs.readFileSync(ADMIN_PREFS_FILE, 'utf8'));
             if (loaded && typeof loaded === 'object') {
+                delete loaded.binDepthCm;
                 Object.assign(adminPreferences, loaded);
-                if (Number(adminPreferences.binDepthCm) > 0) {
-                    defaultBinDepthMm = Math.round(Number(adminPreferences.binDepthCm) * 10);
-                }
             }
         }
     } catch (err) {
@@ -509,26 +505,6 @@ function loadAdminPreferences() {
 function saveAdminPreferences() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(ADMIN_PREFS_FILE, JSON.stringify(adminPreferences, null, 2));
-}
-
-function recomputeStoredFills() {
-    for (const p of df703Packets) {
-        if (p.reportType === '01' || p.reportType === '02') {
-            const depth = Number(deviceSettings[p.imei]?.binDepthMm) || defaultBinDepthMm;
-            p.binDepthMm = depth;
-            p.fillPct = computeFillPct(p.heightMm, depth);
-            if (p.parsed) {
-                p.parsed.binDepthMm = depth;
-                p.parsed.fillPct = p.fillPct;
-            }
-        }
-    }
-    for (const [imei, dev] of deviceState.entries()) {
-        if (typeof dev.heightMm === 'number') {
-            const depth = Number(deviceSettings[imei]?.binDepthMm) || defaultBinDepthMm;
-            dev.fillPct = computeFillPct(dev.heightMm, depth);
-        }
-    }
 }
 
 /**
@@ -801,14 +777,6 @@ const server = http.createServer(async (req, res) => {
                 return sendJson(res, 400, { error: 'Invalid JSON body' });
             }
             const next = { ...adminPreferences };
-            if (body.binDepthCm !== undefined) {
-                const cm = Number(body.binDepthCm);
-                if (!Number.isFinite(cm) || cm < 1 || cm > 500) {
-                    return sendJson(res, 400, { error: 'binDepthCm must be between 1 and 500 cm' });
-                }
-                next.binDepthCm = Math.round(cm);
-                defaultBinDepthMm = next.binDepthCm * 10;
-            }
             if (body.fireTemp !== undefined) next.fireTemp = Math.max(0, Math.min(255, Number(body.fireTemp)));
             if (body.fullThreshold !== undefined) next.fullThreshold = Math.max(0, Math.min(100, Number(body.fullThreshold)));
             if (body.tiltDeg !== undefined) next.tiltDeg = Math.max(0, Math.min(90, Number(body.tiltDeg)));
@@ -818,7 +786,6 @@ const server = http.createServer(async (req, res) => {
             if (body.autoSchedulerEnabled !== undefined) next.autoSchedulerEnabled = Boolean(body.autoSchedulerEnabled);
             adminPreferences = next;
             saveAdminPreferences();
-            recomputeStoredFills();
             return sendJson(res, 200, { ok: true, preferences: adminPreferences });
         } catch (err) {
             return sendJson(res, 400, { error: err.message });
