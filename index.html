@@ -751,7 +751,7 @@
                     </h1>
 
                     <p class="text-base text-sub max-w-xl leading-relaxed" data-i18n="auth_hero_desc">
-                        See every trash bin clearly in plain language—fire heat protection, tipped alerts, custom AI street routes, and live moving truck simulation built for every operator.
+                        See every trash bin clearly in plain language—fire heat protection, tilted alerts, custom AI street routes, and live moving truck simulation built for every operator.
                     </p>
                 </div>
 
@@ -760,7 +760,7 @@
                     <div class="glass-feature-card p-4 space-y-2 reveal-stage reveal-delay-1">
                         <div class="w-9 h-9 rounded-xl bg-[#8B5CF6]/15 text-[#8B5CF6] flex items-center justify-center"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
                         <div class="font-display font-bold text-sm text-main" data-i18n="auth_f1_t">Safety First</div>
-                        <p class="text-xs text-sub leading-snug" data-i18n="auth_f1_d">Instant heat &amp; tipped-bin alerts matching your custom admin rules.</p>
+                        <p class="text-xs text-sub leading-snug" data-i18n="auth_f1_d">Instant heat &amp; tilted-bin alerts matching your custom admin rules.</p>
                     </div>
                     <div class="glass-feature-card p-4 space-y-2 reveal-stage reveal-delay-2">
                         <div class="w-9 h-9 rounded-xl bg-[#EC4899]/15 text-[#EC4899] flex items-center justify-center"><i class="fa-solid fa-route" aria-hidden="true"></i></div>
@@ -1140,7 +1140,7 @@
                             </div>
                             <div class="min-w-0">
                                 <div class="text-sm font-bold text-main" id="urgentStripTitle">2 Bins Need Immediate Attention</div>
-                                <div class="text-xs text-sub truncate" id="urgentStripDetail">1 high-heat warning &bull; 1 bin tipped over.</div>
+                                <div class="text-xs text-sub truncate" id="urgentStripDetail">1 high-heat warning &bull; 1 bin tilted.</div>
                             </div>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
@@ -1177,7 +1177,7 @@
                                 <div class="text-xs font-semibold text-sub" data-i18n="kpi_safety">Safety Warnings</div>
                                 <div class="flex items-center gap-2 mt-2">
                                     <span class="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-500 text-xs font-bold"><i class="fa-solid fa-fire me-1"></i><span id="kpiFireCount">1</span> <span data-i18n="kpi_heat_word">Heat</span></span>
-                                    <span class="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-xs font-bold"><i class="fa-solid fa-person-falling-burst me-1"></i><span id="kpiTiltCount">1</span> <span data-i18n="kpi_tilt_word">Tipped</span></span>
+                                    <span class="px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-xs font-bold"><i class="fa-solid fa-person-falling-burst me-1"></i><span id="kpiTiltCount">1</span> <span data-i18n="kpi_tilt_word">Tilted</span></span>
                                 </div>
                             </div>
                             <span id="kpiSafetyTotal" class="kpi-number text-rose-500">2</span>
@@ -1266,7 +1266,7 @@
                                 <button type="button" onclick="filterMapMarkers('partial', this)" class="map-f-btn seg-pill !px-2.5 !py-1"><span data-i18n="f_mid">Half</span> (<span id="fMid">34</span>)</button>
                                 <button type="button" onclick="filterMapMarkers('empty', this)" class="map-f-btn seg-pill !px-2.5 !py-1"><span data-i18n="f_low">Low</span> (<span id="fLow">68</span>)</button>
                                 <button type="button" onclick="filterMapMarkers('fire', this)" class="map-f-btn seg-pill !px-2.5 !py-1 text-rose-500"><i class="fa-solid fa-fire me-1"></i><span data-i18n="kpi_heat_word">Heat</span></button>
-                                <button type="button" onclick="filterMapMarkers('tilt', this)" class="map-f-btn seg-pill !px-2.5 !py-1 text-[#A78BFA]"><i class="fa-solid fa-person-falling-burst me-1"></i><span data-i18n="kpi_tilt_word">Tipped</span></button>
+                                <button type="button" onclick="filterMapMarkers('tilt', this)" class="map-f-btn seg-pill !px-2.5 !py-1 text-[#A78BFA]"><i class="fa-solid fa-person-falling-burst me-1"></i><span data-i18n="kpi_tilt_word">Tilted</span></button>
                                 <button type="button" onclick="filterMapMarkers('lowbatt', this)" class="map-f-btn seg-pill !px-2.5 !py-1"><i class="fa-solid fa-battery-quarter me-1 text-amber-500"></i><span data-i18n="f_batt">Battery</span></button>
                             </div>
 
@@ -1335,7 +1335,7 @@
                     <div class="apple-card p-6 flex flex-wrap items-center justify-between gap-4 reveal-stage">
                         <div>
                             <h2 class="font-display text-xl font-bold text-main">Safety &amp; Maintenance Alerts</h2>
-                            <p class="text-sm text-sub mt-0.5">Live alerts automatically calculated using your Admin Preference limits (Fire Temp: <strong id="alertRuleFireLbl">55°C</strong>, Full: <strong id="alertRuleFullLbl">80%</strong>, Tipped: <strong id="alertRuleTiltLbl">35°</strong>).</p>
+                            <p class="text-sm text-sub mt-0.5">Live alerts automatically calculated using your Admin Preference limits (Fire Temp: <strong id="alertRuleFireLbl">55°C</strong>, Full: <strong id="alertRuleFullLbl">80%</strong>, Tilted: <strong id="alertRuleTiltLbl">35°</strong>).</p>
                         </div>
                         <div class="flex items-center gap-2.5">
                             <button type="button" onclick="simulateFireDemo()" class="px-4 py-2.5 pill-btn-soft text-xs font-semibold text-rose-500">Test Heat Warning</button>
@@ -1377,7 +1377,7 @@
                                 <span class="text-[11px] font-bold text-dim me-1">Filter:</span>
                                 <button type="button" onclick="setBinsTableFilter('all', this)" class="bin-tbl-f seg-pill is-active !px-2.5 !py-1">All</button>
                                 <button type="button" onclick="setBinsTableFilter('fire', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-rose-500"><i class="fa-solid fa-fire me-1"></i>High Heat</button>
-                                <button type="button" onclick="setBinsTableFilter('tilt', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-[#A78BFA]"><i class="fa-solid fa-person-falling-burst me-1"></i>Tipped</button>
+                                <button type="button" onclick="setBinsTableFilter('tilt', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-[#A78BFA]"><i class="fa-solid fa-person-falling-burst me-1"></i>Tilted</button>
                                 <button type="button" onclick="setBinsTableFilter('full', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-amber-500">Full</button>
                                 <button type="button" onclick="setBinsTableFilter('lowbatt', this)" class="bin-tbl-f seg-pill !px-2.5 !py-1 text-amber-500"><i class="fa-solid fa-battery-quarter me-1"></i>Low Battery</button>
                             </div>
@@ -1419,7 +1419,7 @@
                             <div class="apple-card p-5"><div class="text-xs text-sub font-semibold">Network Reception</div><div class="kpi-number text-emerald-500 mt-1">Strong</div></div>
                             <div class="apple-card p-5"><div class="text-xs text-sub font-semibold">Needs New Battery</div><div id="hlLowBatt" class="kpi-number text-amber-500 mt-1">3</div></div>
                             <div class="apple-card p-5"><div class="text-xs text-sub font-semibold">High Heat Warning</div><div id="hlFire" class="kpi-number text-rose-500 mt-1">1</div></div>
-                            <div class="apple-card p-5"><div class="text-xs text-sub font-semibold">Tipped Over</div><div id="hlTilt" class="kpi-number text-[#A78BFA] mt-1">1</div></div>
+                            <div class="apple-card p-5"><div class="text-xs text-sub font-semibold">Tilted</div><div id="hlTilt" class="kpi-number text-[#A78BFA] mt-1">1</div></div>
                         </div>
                         <div class="apple-card overflow-hidden">
                             <div class="overflow-x-auto max-h-[500px]">
@@ -1475,7 +1475,7 @@
                                         <select id="routeStrategySelect" class="apple-input w-full px-3 py-2 text-xs font-semibold">
                                             <option value="balanced">Balanced (AI Smart Priority)</option>
                                             <option value="fire_first">High Heat / Fire First</option>
-                                            <option value="tilt_first">Tipped-Over Bins First</option>
+                                            <option value="tilt_first">Tilted Bins First</option>
                                             <option value="alarm_first">All Safety Alerts First</option>
                                             <option value="fill_desc">Fullest Bins First (%)</option>
                                             <option value="tsp">Shortest Street Distance</option>
@@ -2064,7 +2064,7 @@
                                             <label for="sliderFireTemp" class="text-sub font-semibold">Fire / High-Heat Limit</label>
                                             <strong id="setFireLbl" class="text-rose-500 font-bold">55&deg;C</strong>
                                         </div>
-                                        <input id="sliderFireTemp" type="range" min="40" max="90" value="55" class="parot-slider" style="--slider-fill-color: #E11D48;">
+                                        <input id="sliderFireTemp" type="range" min="5" max="90" value="55" class="parot-slider" style="--slider-fill-color: #E11D48;">
                                         <div class="text-[11px] text-dim" id="adminFireImpactHint">Currently flagging 1 bin(s) at or above 55&deg;C.</div>
                                     </div>
                                     <div>
@@ -2076,7 +2076,7 @@
                                     </div>
                                     <div>
                                         <div class="flex justify-between mb-1">
-                                            <label for="sliderTiltDeg" class="text-sub font-semibold">Tipped-Over Angle Limit</label>
+                                            <label for="sliderTiltDeg" class="text-sub font-semibold">Tilted Angle Limit</label>
                                             <strong id="setTiltLbl" class="text-[#A78BFA] font-bold">35&deg;</strong>
                                         </div>
                                         <input id="sliderTiltDeg" type="range" min="15" max="65" value="35" class="parot-slider" style="--slider-fill-color: #8B5CF6;">
@@ -2322,8 +2322,8 @@
                 auth_badge: 'PAROT SMART CITY • WASTE & FLEET',
                 auth_sub: 'Smart Bin & Fleet Operations Platform',
                 auth_hero_1: 'Smarter Pickups.', auth_hero_2: 'Zero Guesswork.',
-                auth_hero_desc: 'See every trash bin clearly in plain language—fire heat protection, tipped alerts, custom AI street routes, and live moving truck simulation built for every operator.',
-                auth_f1_t: 'Safety First', auth_f1_d: 'Instant heat & tipped-bin alerts matching your custom admin rules.',
+                auth_hero_desc: 'See every trash bin clearly in plain language—fire heat protection, tilted alerts, custom AI street routes, and live moving truck simulation built for every operator.',
+                auth_f1_t: 'Safety First', auth_f1_d: 'Instant heat & tilted-bin alerts matching your custom admin rules.',
                 auth_f2_t: 'Self-Explaining AI', auth_f2_d: 'Every stop, fuel cost, and depot-to-recycling loop explained simply.',
                 auth_f3_t: 'Live Fleet Story', auth_f3_d: 'Watch drivers move along crisp vector streets step by step.',
                 auth_portal_lbl: 'Secure City Portal', auth_title: 'Welcome back.',
@@ -2335,7 +2335,7 @@
                 nav_drivers: 'Fleet & Drivers', nav_analytics: 'Reports', nav_schedules: 'Schedules', nav_api: 'DF703 Sensor & API', nav_enterprise: 'Cloud, Security & SLA', nav_settings: 'Admin Preferences',
                 drv_comp_title: 'Driver App GPS & Route Compliance Control', export_csv_btn: 'Export 3-Month History (Excel CSV)',
                 kpi_bins: 'Monitored Bins', kpi_full: 'Full & Ready', kpi_safety: 'Safety Warnings', kpi_fleet: 'Active Trucks',
-                kpi_connected: 'Connected', kpi_filled_lbl: 'filled', kpi_heat_word: 'Heat', kpi_tilt_word: 'Tipped', kpi_watch_live: 'Watch Live Movement',
+                kpi_connected: 'Connected', kpi_filled_lbl: 'filled', kpi_heat_word: 'Heat', kpi_tilt_word: 'Tilted', kpi_watch_live: 'Watch Live Movement',
                 urgent_see_btn: 'See Why & Details', urgent_send_btn: 'Send Nearest Truck',
                 f_all: 'All', f_full: 'Full', f_mid: 'Half', f_low: 'Low', f_batt: 'Battery',
                 map_street: 'Street HD', map_sat: 'Satellite', map_list: 'List',
@@ -2892,7 +2892,7 @@
             document.getElementById('inspMeta').innerText = `${b.category} • ${isAr ? 'حساس' : 'Sensor'} #${b.serial.slice(-5)}`;
             document.getElementById('inspFill').innerText = `${b.fill}%`;
             document.getElementById('inspTemp').innerText = `${b.temp}°C`;
-            document.getElementById('inspTilt').innerText = isBinTilted(b) ? (isAr ? `مائلة (${b.angle}°)` : `Tipped (${b.angle}°)`) : (isAr ? 'مستقيمة' : 'Upright');
+            document.getElementById('inspTilt').innerText = isBinTilted(b) ? (isAr ? `مائلة (${b.angle}°)` : `Tilted (${b.angle}°)`) : (isAr ? 'مستقيمة' : 'Upright');
             const sig = signalQualityLabel(b.rssi);
             const sigLabel = isAr ? (sig.label === 'Strong' ? 'قوية' : sig.label === 'Good' ? 'جيدة' : 'مقبولة') : sig.label;
             document.getElementById('inspSig').innerText = `${sigLabel} • ${batteryText(b)}`;
@@ -2905,7 +2905,7 @@
                     ? `تم تفعيل التنبيه لأن حرارة السلة (${b.temp}°C) تجاوزت حد الأمان المحدد من الأدمن (${settings.fireTemp}°C). يُنصح بإرسال فحص فوراً.`
                     : `Warning triggered because bin temp (${b.temp}°C) crossed your Admin Fire Limit (${settings.fireTemp}°C). Dispatch inspection immediately.`;
             } else if (isBinTilted(b)) {
-                badge.innerText = isAr ? 'سلة مائلة' : 'Tipped Over'; badge.className = 'px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-[11px] font-bold';
+                badge.innerText = isAr ? 'سلة مائلة' : 'Tilted'; badge.className = 'px-2.5 py-0.5 rounded-full bg-[#8B5CF6]/15 text-[#A78BFA] text-[11px] font-bold';
                 whyEl.innerText = isAr
                     ? `ميل السلة وصل إلى ${b.angle}° (الحد المسموح ${settings.tiltDeg}°). قد تكون السلة سقطت وبحاجة لإعادة تعديل وتفريغ (${b.fill}%).`
                     : `Position tilted ${b.angle}° (limit: ${settings.tiltDeg}°). Bin may be knocked down; next driver stop can reset & empty it (${b.fill}% full).`;
@@ -2978,7 +2978,7 @@
 
             document.getElementById('alertsSummaryGrid').innerHTML =
                 makeGroup(`Fire & High Heat (>= ${settings.fireTemp}°C)`, 'Triggered automatically when heat exceeds Admin Temperature Limit.', 'bg-rose-500/15 text-rose-500', 'fa-solid fa-fire', fires, b => `Heat ${b.temp}°C • Fill ${b.fill}%`) +
-                makeGroup(`Tipped Over (>= ${settings.tiltDeg}°)`, 'Triggered when bin leans past your safe upright tilt angle.', 'bg-[#8B5CF6]/15 text-[#A78BFA]', 'fa-solid fa-person-falling-burst', tilts, b => `Tilted ${b.angle}° • Fill ${b.fill}%`) +
+                makeGroup(`Tilted (>= ${settings.tiltDeg}°)`, 'Triggered when bin leans past your safe upright tilt angle.', 'bg-[#8B5CF6]/15 text-[#A78BFA]', 'fa-solid fa-person-falling-burst', tilts, b => `Tilted ${b.angle}° • Fill ${b.fill}%`) +
                 makeGroup(`Full & Ready (>= ${settings.fullThreshold}%)`, 'Scheduled automatically onto next driver pickup loop.', 'bg-amber-500/15 text-amber-500', 'fa-solid fa-fill-drip', fulls, b => `Fill level ${b.fill}%`) +
                 makeGroup(`Low Battery (< ${settings.lowBattThreshold}%)`, 'Sensors needing maintenance battery swap soon.', 'bg-[#06B6D4]/15 text-[#06B6D4]', 'fa-solid fa-battery-quarter', batts, b => `Battery: ${batteryText(b)}`);
         }
@@ -3009,8 +3009,8 @@
                 ? (isAr ? `${safetyCount} تنبيهات أمان عاجلة تحتاج تدخل الآن` : `${safetyCount} Urgent Safety Alerts Need Action`)
                 : (isAr ? 'جميع السلات في حالة آمنة تماماً' : 'All City Bins Are Operating Safely');
             document.getElementById('urgentStripDetail').innerText = safetyCount > 0
-                ? (isAr ? `${fires.length} تنبيه حرارة عالية (>=${settings.fireTemp}°C) • ${tilts.length} سلة منقلبة (>=${settings.tiltDeg}°).` : `${fires.length} high-heat (>=${settings.fireTemp}°C) • ${tilts.length} tipped over (>=${settings.tiltDeg}°).`)
-                : (isAr ? 'لا توجد أي إنذارات حريق أو انقلاب حالياً.' : 'No fire or tipped-bin alerts detected right now.');
+                ? (isAr ? `${fires.length} تنبيه حرارة عالية (>=${settings.fireTemp}°C) • ${tilts.length} سلة منقلبة (>=${settings.tiltDeg}°).` : `${fires.length} high-heat (>=${settings.fireTemp}°C) • ${tilts.length} tilted (>=${settings.tiltDeg}°).`)
+                : (isAr ? 'لا توجد أي إنذارات حريق أو انقلاب حالياً.' : 'No fire or tilted-bin alerts detected right now.');
 
             document.getElementById('fAll').innerText = s.length;
             document.getElementById('fFull').innerText = full;
@@ -3021,7 +3021,7 @@
                 .sort((a, b) => ((isBinFire(b) ? 2 : 0) + (isBinTilted(b) ? 1 : 0)) - ((isBinFire(a) ? 2 : 0) + (isBinTilted(a) ? 1 : 0)) || b.fill - a.fill).slice(0, 6);
 
             document.getElementById('priorityQueueList').innerHTML = urgent.map(b => {
-                const tag = isBinFire(b) ? `<span class="text-rose-500 font-bold">Heat ${b.temp}°C</span>` : isBinTilted(b) ? `<span class="text-[#A78BFA] font-bold">Tipped</span>` : `<span class="text-amber-500 font-bold">${b.fill}%</span>`;
+                const tag = isBinFire(b) ? `<span class="text-rose-500 font-bold">Heat ${b.temp}°C</span>` : isBinTilted(b) ? `<span class="text-[#A78BFA] font-bold">Tilted</span>` : `<span class="text-amber-500 font-bold">${b.fill}%</span>`;
                 return `<button type="button" onclick="inspectBinById(${b.id})" class="w-full soft-well p-3 text-start hover:opacity-90 flex items-center justify-between text-xs">
                     <span class="font-semibold text-main truncate">${b.name}</span>${tag}
                 </button>`;
@@ -3031,7 +3031,7 @@
                 <div class="soft-well p-3 flex items-center justify-between gap-2">
                     <div class="min-w-0">
                         <div class="font-bold text-main truncate">${b.name}</div>
-                        <div class="text-[11px] text-sub">${isBinFire(b) ? 'Fire / High heat detected' : isBinTilted(b) ? 'Bin tipped over' : 'Ready for pickup'}</div>
+                        <div class="text-[11px] text-sub">${isBinFire(b) ? 'Fire / High heat detected' : isBinTilted(b) ? 'Bin tilted' : 'Ready for pickup'}</div>
                     </div>
                     <span class="font-bold ${isBinFire(b) ? 'text-rose-500' : isBinTilted(b) ? 'text-[#A78BFA]' : 'text-amber-500'} shrink-0">${isBinFire(b) ? b.temp + '°C' : isBinTilted(b) ? b.angle + '°' : b.fill + '%'}</span>
                 </div>`).join('');
@@ -3119,7 +3119,7 @@
 
             document.getElementById('binsTableBody').innerHTML = list.slice(0, 60).map(b => {
                 const sig = signalQualityLabel(b.rssi);
-                const pos = isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tipped Over</span>' : 'Upright';
+                const pos = isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tilted</span>' : 'Upright';
                 return `<tr>
                     <td class="font-bold text-main">${b.name}</td>
                     <td class="text-sub">${b.category}</td>
@@ -3140,7 +3140,7 @@
             document.getElementById('hlTilt').innerText = s.filter(isBinTilted).length;
             document.getElementById('healthTableBody').innerHTML = s.slice(0, 35).map(b => {
                 const sig = signalQualityLabel(b.rssi);
-                const st = isBinFire(b) ? '<span class="text-rose-500 font-bold">High Heat</span>' : isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tipped Over</span>' : isBinLowBatt(b) ? '<span class="text-amber-500 font-bold">Low Battery</span>' : '<span class="text-emerald-500 font-bold">Healthy</span>';
+                const st = isBinFire(b) ? '<span class="text-rose-500 font-bold">High Heat</span>' : isBinTilted(b) ? '<span class="text-[#A78BFA] font-bold">Tilted</span>' : isBinLowBatt(b) ? '<span class="text-amber-500 font-bold">Low Battery</span>' : '<span class="text-emerald-500 font-bold">Healthy</span>';
                 return `<tr><td class="font-bold text-main">${b.name}</td><td>${b.category}</td><td class="${sig.cls} font-semibold">${sig.label} (${b.rssi} dBm)</td><td>${batteryText(b)}</td><td>${b.temp}&deg;C</td><td>${st}</td></tr>`;
             }).join('');
         }
@@ -3157,7 +3157,7 @@
         }
 
         function exportBinsCsv() {
-            const rows = ['Bin,Street,Fill%,TempC,Position,Signal,Battery', ...getScopedBins().map(b => `${b.code},"${b.street}",${b.fill},${b.temp},${isBinTilted(b) ? 'Tipped' : 'Upright'},${signalQualityLabel(b.rssi).label},"${batteryText(b)}"`)];
+            const rows = ['Bin,Street,Fill%,TempC,Position,Signal,Battery', ...getScopedBins().map(b => `${b.code},"${b.street}",${b.fill},${b.temp},${isBinTilted(b) ? 'Tilted' : 'Upright'},${signalQualityLabel(b.rssi).label},"${batteryText(b)}"`)];
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
             a.download = 'parot-smart-bins-report.csv'; a.click();
@@ -3182,7 +3182,7 @@
             const zone = document.getElementById('routeZoneSelect')?.value;
             const scoped = getScopedBins().filter(b => !zone || b.zone === zone);
             sel.innerHTML = '<option value="">+ Pin specific bin (#1, #2...)</option>' +
-                scoped.map(b => `<option value="${b.id}">${b.code} — ${b.street} (${b.fill}%${isBinFire(b) ? ', HEAT' : isBinTilted(b) ? ', TIPPED' : ''})</option>`).join('');
+                scoped.map(b => `<option value="${b.id}">${b.code} — ${b.street} (${b.fill}%${isBinFire(b) ? ', HEAT' : isBinTilted(b) ? ', TILTED' : ''})</option>`).join('');
             renderPinnedStopsTray();
         }
 
@@ -3369,7 +3369,7 @@
             routeMap.fitBounds(routeOverlay.getBounds(), { padding: [36, 36] });
 
             const urgCount = activeRouteStops.filter(s => isBinFire(s) || isBinTilted(s)).length;
-            const stratText = strat === 'fire_first' ? 'Burning / High-Heat Bins First' : strat === 'tilt_first' ? 'Tipped / Fallen Bins First' : strat === 'alarm_first' ? 'Emergency Safety Warnings First' : strat === 'tsp' ? 'Shortest Street Loop' : strat === 'fill_desc' ? 'Fullest Bins First' : 'Balanced Safety & Fuel Savings';
+            const stratText = strat === 'fire_first' ? 'Burning / High-Heat Bins First' : strat === 'tilt_first' ? 'Tilted / Fallen Bins First' : strat === 'alarm_first' ? 'Emergency Safety Warnings First' : strat === 'tsp' ? 'Shortest Street Loop' : strat === 'fill_desc' ? 'Fullest Bins First' : 'Balanced Safety & Fuel Savings';
             const pinNote = pinnedStopIds.length ? ` (${pinnedStopIds.length} manually pinned first)` : '';
             const summaryStr = `Started at "${cfg.depot[2]}", picked ${activeRouteStops.length} bins via "${stratText}"${pinNote} (${urgCount} urgent alerts + >= ${thr}% full), sequenced road-by-road with no U-turns, ${settings.routeEndPolicy === 'round_trip' ? `then unloaded at ${cfg.landfill[2]} before returning to ${cfg.depot[2]}` : settings.routeEndPolicy === 'warehouse_only' ? `and returned directly back to ${cfg.depot[2]}` : `and finished shift at ${cfg.landfill[2]}`}.`;
             document.getElementById('aiReasoningSummary').innerText = summaryStr;
@@ -3387,7 +3387,7 @@
             activeRouteStops.forEach((s, i) => {
                 const segKm = (haversineKm(prev, [s.lat, s.lng]) * 1.3).toFixed(1);
                 prev = [s.lat, s.lng];
-                const reason = isBinFire(s) ? `<span class="text-rose-500 font-bold">Heat ${s.temp}°C</span>` : isBinTilted(s) ? `<span class="text-[#A78BFA] font-bold">Tipped</span>` : `<span class="text-amber-500 font-bold">${s.fill}% full</span>`;
+                const reason = isBinFire(s) ? `<span class="text-rose-500 font-bold">Heat ${s.temp}°C</span>` : isBinTilted(s) ? `<span class="text-[#A78BFA] font-bold">Tilted</span>` : `<span class="text-amber-500 font-bold">${s.fill}% full</span>`;
                 rows.push(`<div class="soft-well p-3 flex items-center justify-between gap-2"><div><div class="font-bold text-main">${i + 1}. ${s.name}</div><div class="text-[11px] text-sub mt-0.5">Why picked: ${reason}</div></div><span class="font-semibold text-sub shrink-0">+${segKm} km</span></div>`);
             });
             if (settings.routeEndPolicy !== 'warehouse_only') rows.push(`<div class="soft-well p-3 font-semibold text-[#A78BFA] flex justify-between"><span>Unload: ${cfg.landfill[2]}</span><span>Recycling Drop</span></div>`);
@@ -3870,7 +3870,7 @@
                 angleVal.innerText = `${liveBin.angle}°`;
                 angleVal.className = `font-display font-extrabold text-xl mt-1 ${isBinTilted(liveBin) ? 'text-[#A78BFA]' : 'text-main'}`;
             }
-            if (angleNote) angleNote.innerText = isBinTilted(liveBin) ? 'TIPPED OVER' : `Upright (< ${settings.tiltDeg}°)`;
+            if (angleNote) angleNote.innerText = isBinTilted(liveBin) ? 'TILTED' : `Upright (< ${settings.tiltDeg}°)`;
 
             if (battVal) battVal.innerText = liveBin.batteryState ? (BATTERY_STATE_LABEL[liveBin.batteryState] || '--') : `${liveBin.battery}%`;
             if (voltNote) voltNote.innerText = liveBin.voltageV ? `${liveBin.voltageV} V (avg of last readings)` : 'Nominal 3.6 V';
@@ -4142,10 +4142,10 @@
             const title = document.getElementById('apiPreviewTitle');
             if (ep === 'bins') {
                 title.innerText = 'Live Bin Status Data';
-                pre.innerText = JSON.stringify({ workspace: currentTenant, bins_online: getScopedBins().length, sample: getScopedBins().slice(0, 2).map(b => ({ bin: b.code, fill: b.fill + '%', temp: b.temp + '°C', position: isBinTilted(b) ? 'Tipped' : 'Upright', battery: batteryText(b) })) }, null, 2);
+                pre.innerText = JSON.stringify({ workspace: currentTenant, bins_online: getScopedBins().length, sample: getScopedBins().slice(0, 2).map(b => ({ bin: b.code, fill: b.fill + '%', temp: b.temp + '°C', position: isBinTilted(b) ? 'Tilted' : 'Upright', battery: batteryText(b) })) }, null, 2);
             } else if (ep === 'alarms') {
                 title.innerText = 'Active Safety Notices';
-                pre.innerText = JSON.stringify({ workspace: currentTenant, fire_limit_c: settings.fireTemp, warnings: getScopedBins().filter(b => isBinFire(b) || isBinTilted(b)).map(b => ({ bin: b.code, issue: isBinFire(b) ? 'High Heat' : 'Tipped Over' })) }, null, 2);
+                pre.innerText = JSON.stringify({ workspace: currentTenant, fire_limit_c: settings.fireTemp, warnings: getScopedBins().filter(b => isBinFire(b) || isBinTilted(b)).map(b => ({ bin: b.code, issue: isBinFire(b) ? 'High Heat' : 'Tilted' })) }, null, 2);
             } else if (ep === 'routes') {
                 title.innerText = 'Smart Route Plan';
                 pre.innerText = JSON.stringify({ end_policy: settings.routeEndPolicy, round_trip_km: lastRouteDistKm || 38.4, stops: activeRouteStops.length || 7 }, null, 2);
