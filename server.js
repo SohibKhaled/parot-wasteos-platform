@@ -744,7 +744,8 @@ const server = http.createServer(async (req, res) => {
             connectedDevices: [...liveSockets.keys()],
             packetsCount: df703Packets.length,
             packets: df703Packets.slice(0, 40),
-            queuedDownlinks: queuedSummary
+            queuedDownlinks: queuedSummary,
+            adminPreferences
         });
     }
 

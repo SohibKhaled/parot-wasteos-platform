@@ -1156,11 +1156,11 @@
                     <div id="kpiRow" class="grid grid-cols-2 xl:grid-cols-4 gap-4 shrink-0">
                         <button type="button" onclick="filterMapMarkers('all')" class="apple-card apple-card-hover p-5 text-start flex items-center justify-between reveal-stage reveal-delay-1">
                             <div>
-                                <div class="text-xs font-semibold text-sub" data-i18n="kpi_bins">Monitored Bins</div>
-                                <div id="kpiTotalBins" class="kpi-number text-main mt-1.5">24</div>
-                                <div class="text-xs text-emerald-500 font-semibold mt-1"><span id="kpiOnlinePct">99%</span> <span data-i18n="kpi_connected">Connected</span></div>
+                                <div class="text-xs font-semibold text-sub" data-i18n="kpi_bins">Signal Strength</div>
+                                <div id="kpiTotalBins" class="kpi-number text-main mt-1.5">Strong</div>
+                                <div class="text-xs text-emerald-500 font-semibold mt-1"><span id="kpiOnlinePct">-65 dBm</span> <span data-i18n="kpi_connected">Connected</span></div>
                             </div>
-                            <div class="w-11 h-11 rounded-2xl soft-well flex items-center justify-center text-emerald-500 text-base"><i class="fa-solid fa-trash-can"></i></div>
+                            <div class="w-11 h-11 rounded-2xl soft-well flex items-center justify-center text-emerald-500 text-base"><i class="fa-solid fa-signal"></i></div>
                         </button>
 
                         <button type="button" onclick="filterMapMarkers('critical')" class="apple-card apple-card-hover p-5 text-start flex items-center justify-between reveal-stage reveal-delay-2">
@@ -2346,7 +2346,7 @@
                 nav_dashboard: 'Overview', nav_alerts: 'Safety Alerts', nav_bins: 'Smart Bins', nav_routes: 'AI Smart Routes',
                 nav_drivers: 'Fleet & Drivers', nav_analytics: 'Reports', nav_schedules: 'Schedules', nav_api: 'DF703 Sensor & API', nav_enterprise: 'Cloud, Security & SLA', nav_settings: 'Admin Preferences',
                 drv_comp_title: 'Driver App GPS & Route Compliance Control', export_csv_btn: 'Export 3-Month History (Excel CSV)',
-                kpi_bins: 'Monitored Bins', kpi_full: 'Full & Ready', kpi_safety: 'Safety Warnings', kpi_fleet: 'Active Trucks',
+                kpi_bins: 'Signal Strength', kpi_full: 'Full & Ready', kpi_safety: 'Safety Warnings', kpi_fleet: 'Active Trucks',
                 kpi_connected: 'Connected', kpi_filled_lbl: 'filled', kpi_heat_word: 'Heat', kpi_tilt_word: 'Tilted', kpi_watch_live: 'Watch Live Movement',
                 urgent_see_btn: 'See Why & Details', urgent_send_btn: 'Send Nearest Truck',
                 f_all: 'All', f_full: 'Full', f_mid: 'Half', f_low: 'Low', f_batt: 'Battery',
@@ -2374,7 +2374,7 @@
                 nav_dashboard: 'نظرة عامة', nav_alerts: 'تنبيهات الأمان', nav_bins: 'السلات الذكية', nav_routes: 'تخطيط المسارات الذكي',
                 nav_drivers: 'السائقون والمحاكاة', nav_analytics: 'التقارير والتوفير', nav_schedules: 'الجداول اليدوية والتلقائية', nav_api: 'ربط حساس DF703 والـ API', nav_enterprise: 'الكلاود والأمان والـ SLA', nav_settings: 'إعدادات الأدمن',
                 drv_comp_title: 'مراقبة التزام السائق بالمسار عبر الـ GPS', export_csv_btn: 'تصدير سجل 3 شهور (Excel CSV)',
-                kpi_bins: 'السلات المتصلة', kpi_full: 'جاهز للرفع', kpi_safety: 'إنذارات الأمان', kpi_fleet: 'شاحنات العمل',
+                kpi_bins: 'قوة الإشارة', kpi_full: 'جاهز للرفع', kpi_safety: 'إنذارات الأمان', kpi_fleet: 'شاحنات العمل',
                 kpi_connected: 'متصلة الآن', kpi_filled_lbl: 'امتلاء', kpi_heat_word: 'حرارة', kpi_tilt_word: 'مقلوبة', kpi_watch_live: 'شاهد حركة الشاحنة',
                 urgent_see_btn: 'عرض السبب والتفاصيل', urgent_send_btn: 'توجيه أقرب شاحنة',
                 f_all: 'الكل', f_full: 'ممتلئ', f_mid: 'متوسط', f_low: 'منخفض', f_batt: 'بطارية',
@@ -3004,7 +3004,15 @@
             const tilts = s.filter(isBinTilted);
             const safetyCount = fires.length + tilts.length;
 
-            document.getElementById('kpiTotalBins').innerText = s.length;
+            const liveSigBin = s.find(b => b.isLive) || s[0];
+            const liveSig = signalQualityLabel(liveSigBin?.rssi || -65);
+            const sigTotalEl = document.getElementById('kpiTotalBins');
+            if (sigTotalEl) {
+                sigTotalEl.innerText = liveSig.label;
+                sigTotalEl.className = `kpi-number mt-1.5 ${liveSig.cls}`;
+            }
+            const onlinePctEl = document.getElementById('kpiOnlinePct');
+            if (onlinePctEl) onlinePctEl.innerText = `${liveSigBin?.rssi ?? -65} dBm`;
             document.getElementById('navBinsBadge').innerText = s.length;
             document.getElementById('kpiFullBins').innerText = full;
             document.getElementById('kpiThresholdLbl').innerText = settings.fullThreshold;
@@ -3942,6 +3950,21 @@
                 if (badge) badge.innerText = `Auto-Sync Active (${pkts.length} live packets)`;
                 renderLivePacketsTable(pkts);
 
+                // Sync any Admin Preferences changed by other users on the server
+                if (data.adminPreferences && !isSavingAdminPrefs) {
+                    const keys = ['fireTemp', 'fullThreshold', 'tiltDeg', 'lowBattThreshold', 'defaultCostPerKm', 'routeEndPolicy', 'autoSchedulerEnabled'];
+                    const changed = keys.some(k => data.adminPreferences[k] !== undefined && data.adminPreferences[k] !== settings[k]);
+                    if (changed) {
+                        Object.assign(settings, data.adminPreferences);
+                        try { localStorage.setItem('parot_admin_settings_v2', JSON.stringify({ settings, anchors: ZONE_ANCHORS })); } catch (e) {}
+                        applyAdminSettingsToUi();
+                        refreshMetricsAndLists();
+                        if (map && typeof renderMapMarkers === 'function') renderMapMarkers(activeFilter);
+                        renderBinsTable();
+                        if (inspectedBin) inspectBin(inspectedBin);
+                    }
+                }
+
                 let latestTelemetry = null;
                 if (pkts.length) {
                     const mAnchors = ZONE_ANCHORS.madinaty.streets;
@@ -4483,10 +4506,12 @@
         }
 
         let adminSaveTimer = null;
+        let isSavingAdminPrefs = false;
         function persistAdminState() {
             try {
                 localStorage.setItem('parot_admin_settings_v2', JSON.stringify({ settings, anchors: ZONE_ANCHORS }));
             } catch (e) {}
+            isSavingAdminPrefs = true;
             clearTimeout(adminSaveTimer);
             adminSaveTimer = setTimeout(async () => {
                 try {
@@ -4495,8 +4520,10 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(settings)
                     });
-                } catch (e) {}
-            }, 220);
+                } catch (e) {} finally {
+                    isSavingAdminPrefs = false;
+                }
+            }, 80);
         }
 
         async function syncAdminPrefsFromServer() {
