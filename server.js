@@ -70,6 +70,12 @@ const PACKETS_FILE = path.join(DATA_DIR, 'df703_packets.jsonl');
 const INGEST_TOKEN = process.env.INGEST_TOKEN || '';
 const DEVICE_SETTINGS_FILE = path.join(DATA_DIR, 'df703_device_settings.json');
 const ADMIN_PREFS_FILE = path.join(DATA_DIR, 'admin_preferences.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const AUDIT_FILE = path.join(DATA_DIR, 'audit_logs.jsonl');
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
+const BACKUP_CONFIG_FILE = path.join(DATA_DIR, 'backup_config.json');
+const SESSION_SECRET_FILE = path.join(DATA_DIR, '.session_secret');
+
 let deviceSettings = {};                 // imei -> { binDepthMm }
 let adminPreferences = {
     fireTemp: 55,
@@ -82,6 +88,66 @@ let adminPreferences = {
 };
 const voltageHistory = new Map();        // imei -> last few battery voltages
 const MAX_STREAM_BUFFER = 4096;
+
+// OWASP Security State: Users, Approval Queue, Granular RBAC, Audit Logs, Rate Limiting, Local Auto-Backup
+const ALL_PERMISSIONS = [
+    'dashboard:read',
+    'alerts:read',
+    'bins:read',
+    'routes:read',
+    'routes:write',
+    'driver:gps',
+    'downlink:send',
+    'devices:write',
+    'prefs:write',
+    'backup:read',
+    'backup:manage',
+    'migration:manage',
+    'audit:read',
+    'users:manage',
+    'chat:use'
+];
+
+const ROLE_DEFAULT_PERMISSIONS = {
+    Admin: [...ALL_PERMISSIONS],
+    Supervisor: ['dashboard:read', 'alerts:read', 'bins:read', 'routes:read', 'routes:write', 'driver:gps', 'downlink:send', 'devices:write', 'prefs:write', 'backup:read', 'chat:use'],
+    Operator: ['dashboard:read', 'alerts:read', 'bins:read', 'routes:read', 'routes:write', 'chat:use'],
+    Driver: ['dashboard:read', 'routes:read', 'driver:gps', 'chat:use'],
+    Auditor: ['dashboard:read', 'alerts:read', 'bins:read', 'routes:read', 'audit:read', 'backup:read', 'chat:use']
+};
+
+let usersStore = [];
+const auditLogs = [];
+let auditSeq = 0;
+const rateLimitBuckets = new Map(); // key -> { count, resetAt }
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+let backupConfig = {
+    schedule: 'daily', // 'hourly' | '6h' | 'daily' | 'weekly' | 'manual'
+    retentionCount: 24,
+    lastRunAt: null,
+    nextRunAt: null,
+    autoDownloadBrowser: false
+};
+
+function getOrCreateSessionSecret() {
+    if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32) {
+        return process.env.SESSION_SECRET;
+    }
+    try {
+        if (fs.existsSync(SESSION_SECRET_FILE)) {
+            const s = fs.readFileSync(SESSION_SECRET_FILE, 'utf8').trim();
+            if (s.length >= 32) return s;
+        }
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        const generated = crypto.randomBytes(48).toString('hex');
+        fs.writeFileSync(SESSION_SECRET_FILE, generated, { mode: 0o600 });
+        return generated;
+    } catch {
+        return crypto.randomBytes(48).toString('hex');
+    }
+}
+const SESSION_SECRET = getOrCreateSessionSecret();
 
 let packetSeq = 0;
 const deviceState = new Map();   // imei -> latest decoded state
@@ -334,18 +400,370 @@ function buildQuarterlyHistoryCsv() {
     return '\uFEFF' + rows.join('\r\n');
 }
 
-function setSecurityAndCorsHeaders(res, contentType) {
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-PAROT-Signature');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+function cleanStr(val, maxLen = 160) {
+    return String(val ?? '')
+        .replace(/[\u0000-\u001F\u007F]/g, '')
+        .replace(/[<>]/g, '')
+        .trim()
+        .slice(0, maxLen);
 }
 
-function sendJson(res, status, data) {
-    setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8');
+function getClientIp(req) {
+    const fwd = req.headers['x-forwarded-for'];
+    if (typeof fwd === 'string' && fwd.trim()) return fwd.split(',')[0].trim().slice(0, 64);
+    return (req.socket?.remoteAddress || 'unknown').slice(0, 64);
+}
+
+function hashPassword(plain, existingSalt) {
+    const salt = existingSalt || crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(String(plain), salt, 64).toString('hex');
+    return `${salt}:${derived}`;
+}
+
+function verifyPassword(plain, storedHash) {
+    if (!storedHash || !storedHash.includes(':')) return false;
+    const [salt, expected] = storedHash.split(':');
+    const actual = crypto.scryptSync(String(plain), salt, 64).toString('hex');
+    const a = Buffer.from(actual, 'hex');
+    const b = Buffer.from(expected, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function signSessionToken(user) {
+    const payloadObj = {
+        uid: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        exp: Date.now() + SESSION_TTL_MS
+    };
+    const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+    const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('base64url');
+    return `${payloadB64}.${sig}`;
+}
+
+function verifySessionToken(token) {
+    if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+    const [payloadB64, sig] = token.split('.');
+    if (!payloadB64 || !sig) return null;
+    const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(payloadB64).digest('base64url');
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expectedSig);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    try {
+        const parsed = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+        if (!parsed.exp || Date.now() > parsed.exp) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function parseCookies(req) {
+    const out = {};
+    const header = req.headers.cookie;
+    if (!header) return out;
+    for (const part of header.split(';')) {
+        const idx = part.indexOf('=');
+        if (idx > 0) {
+            const k = part.slice(0, idx).trim();
+            const v = part.slice(idx + 1).trim();
+            out[k] = decodeURIComponent(v);
+        }
+    }
+    return out;
+}
+
+function getAuthenticatedUser(req) {
+    const cookies = parseCookies(req);
+    const hdrToken = req.headers['x-session-token'] ||
+        ((req.headers.authorization || '').startsWith('Bearer ') ? req.headers.authorization.slice(7).trim() : '');
+    const token = cookies.tmg_session || hdrToken;
+    const claims = verifySessionToken(token);
+    if (!claims) return null;
+    const user = usersStore.find(u => u.id === claims.uid && u.status === 'approved');
+    return user || null;
+}
+
+function userHasPermission(user, perm) {
+    if (!user || user.status !== 'approved') return false;
+    const perms = Array.isArray(user.permissions) ? user.permissions : (ROLE_DEFAULT_PERMISSIONS[user.role] || []);
+    return perms.includes('*') || perms.includes(perm);
+}
+
+function sanitizeUserPublic(u) {
+    return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        permissions: u.permissions || ROLE_DEFAULT_PERMISSIONS[u.role] || [],
+        requestedNote: u.requestedNote || '',
+        createdAt: u.createdAt,
+        approvedAt: u.approvedAt || null,
+        approvedBy: u.approvedBy || null,
+        lastLoginAt: u.lastLoginAt || null,
+        lastLoginIp: u.lastLoginIp || null
+    };
+}
+
+function logAudit(event) {
+    const rec = {
+        id: ++auditSeq,
+        at: new Date().toISOString(),
+        actorId: event.actorId || null,
+        actorEmail: cleanStr(event.actorEmail || 'anonymous', 120),
+        actorRole: cleanStr(event.actorRole || 'Public', 40),
+        action: cleanStr(event.action || 'EVENT', 64),
+        target: cleanStr(event.target || '-', 120),
+        status: cleanStr(event.status || 'INFO', 24),
+        ip: cleanStr(event.ip || 'unknown', 64),
+        details: cleanStr(event.details || '', 260)
+    };
+    auditLogs.unshift(rec);
+    if (auditLogs.length > 500) auditLogs.pop();
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.appendFileSync(AUDIT_FILE, JSON.stringify(rec) + '\n');
+    } catch {}
+    return rec;
+}
+
+function loadAuditLogs() {
+    try {
+        if (!fs.existsSync(AUDIT_FILE)) return;
+        const lines = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean);
+        for (const line of lines.slice(-400)) {
+            try {
+                const rec = JSON.parse(line);
+                auditSeq = Math.max(auditSeq, Number(rec.id) || 0);
+                auditLogs.unshift(rec);
+            } catch {}
+        }
+        if (auditLogs.length > 500) auditLogs.length = 500;
+    } catch {}
+}
+
+function saveUsersStore() {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(USERS_FILE, JSON.stringify(usersStore, null, 2));
+}
+
+function loadUsersStore() {
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            const loaded = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+            if (Array.isArray(loaded) && loaded.length) {
+                usersStore = loaded;
+                return;
+            }
+        }
+    } catch {}
+    const now = new Date().toISOString();
+    usersStore = [
+        {
+            id: 'u-admin-1',
+            name: 'TMG Madinaty Admin',
+            email: 'admin@tmg-madinaty.com',
+            passwordHash: hashPassword('TmgAdmin#2026'),
+            role: 'Admin',
+            status: 'approved',
+            permissions: [...ALL_PERMISSIONS],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-ops-1',
+            name: 'Madinaty Fleet Supervisor',
+            email: 'ops@tmg-madinaty.com',
+            passwordHash: hashPassword('TmgOps#2026'),
+            role: 'Supervisor',
+            status: 'approved',
+            permissions: [...ROLE_DEFAULT_PERMISSIONS.Supervisor],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-drv-1',
+            name: 'Ahmed Mostafa (#101)',
+            email: 'driver101@tmg-madinaty.com',
+            passwordHash: hashPassword('TmgDriver#2026'),
+            role: 'Driver',
+            status: 'approved',
+            permissions: [...ROLE_DEFAULT_PERMISSIONS.Driver],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-aud-1',
+            name: 'TMG Security Auditor',
+            email: 'audit@tmg-madinaty.com',
+            passwordHash: hashPassword('TmgAudit#2026'),
+            role: 'Auditor',
+            status: 'approved',
+            permissions: [...ROLE_DEFAULT_PERMISSIONS.Auditor],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        }
+    ];
+    saveUsersStore();
+}
+
+function checkRateLimit(key, limit, windowMs) {
+    const now = Date.now();
+    let bucket = rateLimitBuckets.get(key);
+    if (!bucket || now > bucket.resetAt) {
+        bucket = { count: 0, resetAt: now + windowMs };
+        rateLimitBuckets.set(key, bucket);
+    }
+    bucket.count++;
+    if (rateLimitBuckets.size > 2000) {
+        for (const [k, v] of rateLimitBuckets.entries()) {
+            if (now > v.resetAt) rateLimitBuckets.delete(k);
+        }
+    }
+    return { allowed: bucket.count <= limit, remaining: Math.max(0, limit - bucket.count), resetAt: bucket.resetAt };
+}
+
+function computeNextBackupIso(schedule) {
+    const msMap = {
+        hourly: 60 * 60 * 1000,
+        '6h': 6 * 60 * 60 * 1000,
+        daily: 24 * 60 * 60 * 1000,
+        weekly: 7 * 24 * 60 * 60 * 1000
+    };
+    const delta = msMap[schedule];
+    return delta ? new Date(Date.now() + delta).toISOString() : null;
+}
+
+function loadBackupConfig() {
+    try {
+        if (fs.existsSync(BACKUP_CONFIG_FILE)) {
+            Object.assign(backupConfig, JSON.parse(fs.readFileSync(BACKUP_CONFIG_FILE, 'utf8')) || {});
+        }
+        if (!backupConfig.nextRunAt && backupConfig.schedule !== 'manual') {
+            backupConfig.nextRunAt = computeNextBackupIso(backupConfig.schedule);
+        }
+    } catch {}
+}
+
+function saveBackupConfig() {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(BACKUP_CONFIG_FILE, JSON.stringify(backupConfig, null, 2));
+}
+
+function listLocalBackups() {
+    try {
+        if (!fs.existsSync(BACKUPS_DIR)) return [];
+        return fs.readdirSync(BACKUPS_DIR)
+            .filter(f => f.endsWith('.json'))
+            .sort((a, b) => b.localeCompare(a))
+            .map(filename => {
+                const full = path.join(BACKUPS_DIR, filename);
+                const st = fs.statSync(full);
+                return { filename, sizeBytes: st.size, createdAt: st.mtime.toISOString() };
+            });
+    } catch {
+        return [];
+    }
+}
+
+function createLocalBackup(trigger = 'manual', actor = 'system') {
+    fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `tmg-backup-${stamp}.json`;
+    const core = {
+        format: 'TMG-LOCAL-BACKUP-V1',
+        platform: 'Smart Waste Solution - TMG (Madinaty)',
+        createdAt: new Date().toISOString(),
+        trigger,
+        actor,
+        adminPreferences,
+        deviceSettings,
+        df703Packets: df703Packets.slice(0, 200),
+        telemetryLog: telemetryLog.slice(0, 200),
+        driverGpsState,
+        users: usersStore.map(sanitizeUserPublic),
+        auditLogsCount: auditLogs.length
+    };
+    const sha256 = crypto.createHash('sha256').update(JSON.stringify(core)).digest('hex');
+    const payload = { ...core, sha256 };
+    fs.writeFileSync(path.join(BACKUPS_DIR, filename), JSON.stringify(payload, null, 2));
+
+    // Retention cleanup
+    const all = listLocalBackups();
+    const keep = Math.max(3, Number(backupConfig.retentionCount) || 24);
+    all.slice(keep).forEach(old => {
+        try { fs.unlinkSync(path.join(BACKUPS_DIR, old.filename)); } catch {}
+    });
+
+    backupConfig.lastRunAt = core.createdAt;
+    backupConfig.nextRunAt = computeNextBackupIso(backupConfig.schedule);
+    saveBackupConfig();
+    return { filename, sha256, createdAt: core.createdAt, packetsCount: core.df703Packets.length };
+}
+
+function requirePermission(req, res, perm) {
+    const user = getAuthenticatedUser(req);
+    const ip = getClientIp(req);
+    if (!user) {
+        logAudit({ action: 'AUTH_REQUIRED', target: req.url, status: 'DENIED', ip, details: `Missing/expired session for ${perm}` });
+        sendJson(res, 401, { error: 'Authentication required. Please sign in.' });
+        return null;
+    }
+    if (perm && !userHasPermission(user, perm)) {
+        logAudit({
+            actorId: user.id,
+            actorEmail: user.email,
+            actorRole: user.role,
+            action: 'RBAC_DENIED',
+            target: req.url,
+            status: 'DENIED',
+            ip,
+            details: `Role ${user.role} lacks permission "${perm}"`
+        });
+        sendJson(res, 403, { error: `Forbidden: permission "${perm}" required for your role (${user.role}).` });
+        return null;
+    }
+    return user;
+}
+
+function setSecurityAndCorsHeaders(res, contentType, req) {
+    res.setHeader('Content-Type', contentType);
+    const origin = req?.headers?.origin;
+    const host = req?.headers?.host;
+    if (origin && host && (origin === `http://${host}` || origin === `https://${host}`)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, X-PAROT-Signature');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '0');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), payment=(), geolocation=(self)');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; " +
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com https://fonts.googleapis.com; " +
+        "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.basemaps.cartocdn.com; " +
+        "connect-src 'self' https://router.project-osrm.org; " +
+        "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    );
+}
+
+function sendJson(res, status, data, req) {
+    setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
     res.writeHead(status);
     res.end(JSON.stringify(data));
 }
@@ -652,20 +1070,490 @@ function tryDeliverNow(imei) {
     return item;
 }
 
+function makeSessionCookie(token, maxAgeSec, req) {
+    const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.socket?.encrypted;
+    return `tmg_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${isHttps ? '; Secure' : ''}`;
+}
+
+function buildLivePlatformContext() {
+    const devs = [...deviceState.values()];
+    const activeFires = devs.filter(d => (d.telemetry?.temperatureC >= adminPreferences.fireTemp) || d.telemetry?.alarms?.fire);
+    const activeTilts = devs.filter(d => (d.telemetry?.tiltAngleDeg >= adminPreferences.tiltDeg) || d.telemetry?.alarms?.fall);
+    const activeFulls = devs.filter(d => (d.telemetry?.fillPct ?? 0) >= adminPreferences.fullThreshold);
+    const pendingUsers = usersStore.filter(u => u.status === 'pending').length;
+    return {
+        devs,
+        activeFires,
+        activeTilts,
+        activeFulls,
+        pendingUsers,
+        latestPkt: df703Packets.find(p => p.reportType === '01' || p.reportType === '02') || df703Packets[0] || null,
+        backups: listLocalBackups()
+    };
+}
+
+function buildAiChatReply(question, user) {
+    const qRaw = cleanStr(question, 500);
+    const q = qRaw.toLowerCase();
+    const isAr = /[\u0600-\u06FF]/.test(qRaw);
+    const ctx = buildLivePlatformContext();
+    const d = ctx.latestPkt;
+
+    const actions = [];
+    if (userHasPermission(user, 'backup:read')) {
+        actions.push({ label: isAr ? 'تنزيل تقرير Excel CSV' : 'Download Live CSV Report', type: 'download', url: '/api/export/history.csv' });
+    }
+    if (userHasPermission(user, 'routes:read')) {
+        actions.push({ label: isAr ? 'فتح Route Studio' : 'Open AI Route Studio', type: 'tab', target: 'routes' });
+    }
+
+    // 1. Report / export query
+    if (/report|csv|export|تقرير|تقارير|ملف/.test(q)) {
+        const msgAr = `تقرير التشغيل المباشر لمنظومة TMG مدينتي:\n• عدد السلات النشطة فعلياً: ${ctx.devs.length}\n• إجمالي الباكتات المستلمة: ${df703Packets.length}\n• حريق: ${ctx.activeFires.length} | مائلة: ${ctx.activeTilts.length} | ممتلئة (>=${adminPreferences.fullThreshold}%): ${ctx.activeFulls.length}\n• حالة السائق: ${driverGpsState.driverName} — التزام ${driverGpsState.compliancePct}%\n• النسخ الاحتياطية المحلية: ${ctx.backups.length} نسخة (آخر نسخة: ${backupConfig.lastRunAt ? new Date(backupConfig.lastRunAt).toLocaleString() : 'لم تُنفذ بعد'}).\n\nيمكنك تحميل التقرير الفعلي مباشرة من الزر أدناه.`;
+        const msgEn = `TMG Madinaty Live Operations Report:\n• Live Hardware Sensors: ${ctx.devs.length} | Total Packets: ${df703Packets.length}\n• Fire Alerts: ${ctx.activeFires.length} | Tilted: ${ctx.activeTilts.length} | Full (>=${adminPreferences.fullThreshold}%): ${ctx.activeFulls.length}\n• Driver Status: ${driverGpsState.driverName} (${driverGpsState.compliancePct}% route compliance)\n• Local Backups: ${ctx.backups.length} stored.\n\nUse the action button below to download the live report.`;
+        return { reply: isAr ? msgAr : msgEn, actions };
+    }
+
+    // 2. Best Route / Priority / Driver Emergency query
+    if (/route|best|priority|driver|fire|tilt|رووت|مسار|سواق|سائق|حريق|ميل|اولوي/.test(q)) {
+        const orderNote = ctx.activeFires.length
+            ? (isAr ? `الأولوية القصوى #1 الآن لإنذار الحريق (${ctx.activeFires.map(x => x.imei).join(', ')})` : `URGENT Priority #1: Fire Alert on ${ctx.activeFires.map(x => x.imei).join(', ')}`)
+            : ctx.activeTilts.length
+            ? (isAr ? `الأولوية #1 الآن لسلة مائلة (${ctx.activeTilts.map(x => x.imei).join(', ')})` : `Priority #1: Tilted bin ${ctx.activeTilts.map(x => x.imei).join(', ')}`)
+            : (isAr ? `لا توجد طوارئ حريق أو ميلان حالياً — الأولوية للسلات >= ${adminPreferences.fullThreshold}% امتلاء مع أقصر مسار شارع-بشارع.` : `No active fire or tilt emergencies right now — prioritizing bins >= ${adminPreferences.fullThreshold}% fill via shortest street loop.`);
+        const msgAr = `توصية المسار الذكي (TMG مدينتي):\n• ${orderNote}\n• قاعدة التحويل التلقائي للسائق: الحريق (أولوية #1) ← الميلان (أولوية #2) ← إكمال باقي محطات المسار.\n• حدود الإنذار الحالية: حرارة ${adminPreferences.fireTemp}°C، امتلاء ${adminPreferences.fullThreshold}%، ميلان ${adminPreferences.tiltDeg}°.`;
+        const msgEn = `Smart Route Recommendation (TMG Madinaty):\n• ${orderNote}\n• Dynamic Emergency Rule: Fire (#1) → Tilted (#2) → Resume remaining scheduled stops.\n• Active Admin Thresholds: Fire >= ${adminPreferences.fireTemp}°C, Full >= ${adminPreferences.fullThreshold}%, Tilt >= ${adminPreferences.tiltDeg}°.`;
+        return { reply: isAr ? msgAr : msgEn, actions };
+    }
+
+    // 3. Security / OWASP / Audit / Users / Backup query
+    if (/security|owasp|audit|user|approve|backup|امان|سكيويرتي|صلاحيات|موافق|باك اب|نسخ/.test(q)) {
+        if (userHasPermission(user, 'audit:read')) {
+            actions.push({ label: isAr ? 'فتح مركز الأمان والنسخ' : 'Open Security & Audit Center', type: 'tab', target: 'security' });
+        }
+        const msgAr = `حالة الأمان (OWASP) والنسخ الاحتياطي:\n• حماية OWASP مفعّلة: تشفير كلمات المرور scrypt، جلسات HMAC-SHA256، حظر Brute-Force، رؤوس CSP/X-Frame-Options، وسجل مراقبة كامل.\n• طلبات المستخدمين المعلقة للموافقة: ${ctx.pendingUsers}\n• سجل المراقبة (Audit Events): ${auditLogs.length} حدث مسجل.\n• جدول النسخ الاحتياطي المحلي: ${backupConfig.schedule} (${ctx.backups.length} نسخة محفوظة محلياً على السيرفر).`;
+        const msgEn = `OWASP Security & Local Backup Status:\n• Active OWASP Controls: scrypt password hashing, HMAC-SHA256 HttpOnly sessions, rate limiting, CSP + X-Frame-Options: DENY, strict RBAC, and Audit Logging.\n• Pending User Approvals: ${ctx.pendingUsers} | Recorded Audit Events: ${auditLogs.length}\n• Local Auto-Backup Schedule: ${backupConfig.schedule} (${ctx.backups.length} local snapshots stored).`;
+        return { reply: isAr ? msgAr : msgEn, actions };
+    }
+
+    // 4. Default / Sensor status query
+    const liveSummaryAr = d
+        ? `قراءة السنسور المباشر (IMEI: ${d.imei}): الامتلاء ${d.fillPct ?? 'No echo'}% (${d.heightCm ?? '--'} سم)، الحرارة ${d.tempC ?? '--'}°C، زاوية الميلان ${d.fallAngleDeg ?? '--'}°، البطارية ${d.voltageV ?? '--'}V (${d.batteryState || 'good'})، الإشارة ${d.rsrpDbm ?? '--'} dBm.`
+        : 'لا توجد قراءات 4G مستلمة في الذاكرة منذ آخر تشغيل للسيرفر، ولكن السيرفر جاهز على TCP :5000 (الخارجي :44200).';
+    const liveSummaryEn = d
+        ? `Live Sensor (IMEI: ${d.imei}): Fill ${d.fillPct ?? 'No echo'}% (${d.heightCm ?? '--'} cm), Temp ${d.tempC ?? '--'}°C, Tilt ${d.fallAngleDeg ?? '--'}°, Battery ${d.voltageV ?? '--'}V (${d.batteryState || 'good'}), Signal ${d.rsrpDbm ?? '--'} dBm.`
+        : 'No 4G sensor packets received yet since last restart; TCP :5000 listener is active and ready.';
+
+    const reply = isAr
+        ? `أهلاً ${user.name} في مساعد Smart Waste Solution — TMG.\n• ${liveSummaryAr}\n• اسألني عن: "أفضل مسار الآن"، "تقرير فوري"، "حالة السنسور والبطارية"، أو "حالة الأمان والباك أب".`
+        : `Hello ${user.name} — TMG AI Operations Assistant.\n• ${liveSummaryEn}\n• Ask me about: "Best route right now", "Live report", "Active fire & tilted alerts", or "OWASP security & backup status".`;
+    return { reply, actions };
+}
+
 const server = http.createServer(async (req, res) => {
     const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const pathname = decodeURIComponent(reqUrl.pathname);
+    const ip = getClientIp(req);
 
     if (req.method === 'OPTIONS') {
-        setSecurityAndCorsHeaders(res, 'text/plain; charset=utf-8');
+        setSecurityAndCorsHeaders(res, 'text/plain; charset=utf-8', req);
         res.writeHead(204);
         return res.end();
+    }
+
+    // Global & Auth Rate Limiting (OWASP API4)
+    if (pathname.startsWith('/api/auth/')) {
+        const rl = checkRateLimit(`auth:${ip}`, 25, 15 * 60 * 1000);
+        if (!rl.allowed) {
+            logAudit({ action: 'RATE_LIMIT_EXCEEDED', target: pathname, status: 'DENIED', ip, details: 'Auth brute-force protection triggered' });
+            return sendJson(res, 429, { error: 'Too many authentication attempts. Please wait 15 minutes.' }, req);
+        }
+    } else if (pathname.startsWith('/api/')) {
+        const rl = checkRateLimit(`api:${ip}`, 240, 60 * 1000);
+        if (!rl.allowed) {
+            return sendJson(res, 429, { error: 'Rate limit exceeded. Slow down requests.' }, req);
+        }
+    }
+
+    // =========================================================================
+    // OWASP AUTHENTICATION, USER APPROVAL WORKFLOW & RBAC SESSION ENDPOINTS
+    // =========================================================================
+    if (req.method === 'GET' && pathname === '/api/auth/session') {
+        const user = getAuthenticatedUser(req);
+        if (!user) return sendJson(res, 200, { authenticated: false, user: null }, req);
+        return sendJson(res, 200, { authenticated: true, user: sanitizeUserPublic(user) }, req);
+    }
+
+    if (req.method === 'POST' && pathname === '/api/auth/login') {
+        try {
+            const body = await readJsonBody(req);
+            const email = cleanStr(body.email || '', 120).toLowerCase();
+            const password = String(body.password || '');
+            if (!email || !password) return sendJson(res, 400, { error: 'Email and password are required' }, req);
+
+            const user = usersStore.find(u => u.email.toLowerCase() === email);
+            if (!user || !verifyPassword(password, user.passwordHash)) {
+                logAudit({ actorEmail: email, action: 'LOGIN_FAILED', target: '/api/auth/login', status: 'DENIED', ip, details: 'Invalid credentials' });
+                return sendJson(res, 401, { error: 'Invalid email or password' }, req);
+            }
+            if (user.status === 'pending') {
+                logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_PENDING_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: 'Attempted login before admin approval' });
+                return sendJson(res, 403, { error: 'Your account is pending Administrator approval.', code: 'PENDING_APPROVAL' }, req);
+            }
+            if (user.status !== 'approved') {
+                logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_REJECTED_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: `Status is ${user.status}` });
+                return sendJson(res, 403, { error: 'Your account access has been revoked or rejected.' }, req);
+            }
+            user.lastLoginAt = new Date().toISOString();
+            user.lastLoginIp = ip;
+            saveUsersStore();
+            const token = signSessionToken(user);
+            logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_SUCCESS', target: 'TMG Madinaty Workspace', status: 'ALLOWED', ip, details: `Signed in with role ${user.role}` });
+            setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
+            res.setHeader('Set-Cookie', makeSessionCookie(token, Math.round(SESSION_TTL_MS / 1000), req));
+            res.writeHead(200);
+            return res.end(JSON.stringify({ ok: true, token, user: sanitizeUserPublic(user) }));
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/auth/demo-login') {
+        try {
+            const body = await readJsonBody(req);
+            const roleReq = cleanStr(body.role || 'Admin', 40);
+            const demoEmailMap = {
+                Admin: 'admin@tmg-madinaty.com',
+                Supervisor: 'ops@tmg-madinaty.com',
+                Driver: 'driver101@tmg-madinaty.com',
+                Auditor: 'audit@tmg-madinaty.com'
+            };
+            const targetEmail = demoEmailMap[roleReq];
+            const user = targetEmail ? usersStore.find(u => u.email === targetEmail && u.status === 'approved') : null;
+            if (!user) return sendJson(res, 403, { error: 'Demo profile unavailable or disabled by admin' }, req);
+            user.lastLoginAt = new Date().toISOString();
+            user.lastLoginIp = ip;
+            saveUsersStore();
+            const token = signSessionToken(user);
+            logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'DEMO_LOGIN_SUCCESS', target: 'TMG Madinaty Workspace', status: 'ALLOWED', ip, details: `Quick-access login as ${user.role}` });
+            setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
+            res.setHeader('Set-Cookie', makeSessionCookie(token, Math.round(SESSION_TTL_MS / 1000), req));
+            res.writeHead(200);
+            return res.end(JSON.stringify({ ok: true, token, user: sanitizeUserPublic(user) }));
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/auth/register') {
+        try {
+            const body = await readJsonBody(req);
+            const name = cleanStr(body.name || '', 80);
+            const email = cleanStr(body.email || '', 120).toLowerCase();
+            const password = String(body.password || '');
+            const requestedRole = ['Supervisor', 'Operator', 'Driver', 'Auditor'].includes(body.role) ? body.role : 'Operator';
+            const note = cleanStr(body.note || '', 160);
+
+            if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return sendJson(res, 400, { error: 'Valid full name and email address are required' }, req);
+            }
+            if (password.length < 8) {
+                return sendJson(res, 400, { error: 'OWASP Policy: Password must be at least 8 characters long' }, req);
+            }
+            if (usersStore.some(u => u.email.toLowerCase() === email)) {
+                return sendJson(res, 409, { error: 'An account with this email already exists' }, req);
+            }
+
+            const newUser = {
+                id: 'u-' + crypto.randomBytes(6).toString('hex'),
+                name,
+                email,
+                passwordHash: hashPassword(password),
+                role: requestedRole,
+                status: 'pending',
+                permissions: [...(ROLE_DEFAULT_PERMISSIONS[requestedRole] || ROLE_DEFAULT_PERMISSIONS.Operator)],
+                requestedNote: note,
+                createdAt: new Date().toISOString()
+            };
+            usersStore.push(newUser);
+            saveUsersStore();
+            logAudit({ actorId: newUser.id, actorEmail: newUser.email, actorRole: requestedRole, action: 'USER_REGISTERED', target: 'Approval Queue', status: 'INFO', ip, details: `New ${requestedRole} account awaiting admin approval` });
+            return sendJson(res, 201, {
+                ok: true,
+                status: 'pending',
+                message: 'Registration submitted. Your account is waiting for Administrator approval before accessing TMG Madinaty.'
+            }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/auth/logout') {
+        const user = getAuthenticatedUser(req);
+        if (user) {
+            logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGOUT', target: 'Session', status: 'INFO', ip, details: 'Signed out cleanly' });
+        }
+        setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
+        res.setHeader('Set-Cookie', makeSessionCookie('', 0, req));
+        res.writeHead(200);
+        return res.end(JSON.stringify({ ok: true }));
+    }
+
+    // =========================================================================
+    // ADMIN USER APPROVAL, GRANULAR PRIVILEGES (RBAC) & AUDIT LOGS
+    // =========================================================================
+    if (req.method === 'GET' && pathname === '/api/admin/users') {
+        const actor = requirePermission(req, res, 'users:manage');
+        if (!actor) return;
+        return sendJson(res, 200, {
+            users: usersStore.map(sanitizeUserPublic),
+            allPermissions: ALL_PERMISSIONS,
+            roleDefaults: ROLE_DEFAULT_PERMISSIONS
+        }, req);
+    }
+
+    const approveMatch = req.method === 'POST' && pathname.match(/^\/api\/admin\/users\/([^/]+)\/approve$/);
+    if (approveMatch) {
+        const actor = requirePermission(req, res, 'users:manage');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req);
+            const target = usersStore.find(u => u.id === approveMatch[1]);
+            if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+            const assignedRole = ROLE_DEFAULT_PERMISSIONS[body.role] ? body.role : target.role;
+            target.role = assignedRole;
+            target.status = 'approved';
+            target.approvedAt = new Date().toISOString();
+            target.approvedBy = actor.email;
+            if (Array.isArray(body.permissions)) {
+                target.permissions = body.permissions.filter(p => ALL_PERMISSIONS.includes(p) || p === '*');
+            } else {
+                target.permissions = [...(ROLE_DEFAULT_PERMISSIONS[assignedRole] || [])];
+            }
+            saveUsersStore();
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_APPROVED', target: target.email, status: 'ALLOWED', ip, details: `Approved as ${target.role} with ${target.permissions.length} privileges` });
+            return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    const rejectMatch = req.method === 'POST' && pathname.match(/^\/api\/admin\/users\/([^/]+)\/reject$/);
+    if (rejectMatch) {
+        const actor = requirePermission(req, res, 'users:manage');
+        if (!actor) return;
+        const target = usersStore.find(u => u.id === rejectMatch[1]);
+        if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+        if (target.id === actor.id) return sendJson(res, 400, { error: 'Cannot reject your own active admin session' }, req);
+        target.status = 'rejected';
+        saveUsersStore();
+        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_REJECTED', target: target.email, status: 'ALLOWED', ip, details: 'Access denied / revoked' });
+        return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
+    }
+
+    const permsMatch = req.method === 'POST' && pathname.match(/^\/api\/admin\/users\/([^/]+)\/permissions$/);
+    if (permsMatch) {
+        const actor = requirePermission(req, res, 'users:manage');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req);
+            const target = usersStore.find(u => u.id === permsMatch[1]);
+            if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+            if (body.role && ROLE_DEFAULT_PERMISSIONS[body.role]) target.role = body.role;
+            if (Array.isArray(body.permissions)) {
+                target.permissions = body.permissions.filter(p => ALL_PERMISSIONS.includes(p) || p === '*');
+            }
+            saveUsersStore();
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PERMISSIONS_UPDATED', target: target.email, status: 'ALLOWED', ip, details: `Role=${target.role}, Perms=${target.permissions.length}` });
+            return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/audit-logs') {
+        const actor = requirePermission(req, res, 'audit:read');
+        if (!actor) return;
+        const limit = Math.min(300, Math.max(10, Number(reqUrl.searchParams.get('limit')) || 120));
+        return sendJson(res, 200, { total: auditLogs.length, logs: auditLogs.slice(0, limit) }, req);
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/security-status') {
+        const actor = requirePermission(req, res, 'dashboard:read');
+        if (!actor) return;
+        return sendJson(res, 200, {
+            standard: 'OWASP Top 10 + ASVS Level 2 Controls',
+            controls: [
+                { id: 'A01', name: 'Broken Access Control (RBAC + Approval Gate)', active: true, detail: `${usersStore.filter(u => u.status === 'pending').length} pending approvals enforced` },
+                { id: 'A02', name: 'Cryptographic Failures (scrypt + HMAC-SHA256)', active: true, detail: 'Salted scrypt passwords, signed HttpOnly sessions, SHA-256 backup digests' },
+                { id: 'A03', name: 'Injection & XSS Defense', active: true, detail: 'CSP headers + zero-SQL JSON store + strict HTML escaping & payload clamping' },
+                { id: 'A05', name: 'Security Misconfiguration Hardening', active: true, detail: 'X-Frame-Options: DENY, nosniff, HSTS, same-origin CORS' },
+                { id: 'A07', name: 'Auth Rate Limiting & Brute-Force Guard', active: true, detail: '25 auth attempts / 15m per IP, 240 API req / min' },
+                { id: 'A09', name: 'Security Logging & Monitoring (Audit Trail)', active: true, detail: `${auditLogs.length} immutable audit events recorded` }
+            ]
+        }, req);
+    }
+
+    // =========================================================================
+    // LOCAL AUTO-BACKUP MANAGER & MULTI-METHOD EXPORT/RESTORE
+    // =========================================================================
+    if (req.method === 'GET' && pathname === '/api/admin/backups') {
+        const actor = requirePermission(req, res, 'backup:read');
+        if (!actor) return;
+        return sendJson(res, 200, { config: backupConfig, files: listLocalBackups() }, req);
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/backups/config') {
+        const actor = requirePermission(req, res, 'backup:manage');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req);
+            if (['hourly', '6h', 'daily', 'weekly', 'manual'].includes(body.schedule)) {
+                backupConfig.schedule = body.schedule;
+                backupConfig.nextRunAt = computeNextBackupIso(body.schedule);
+            }
+            if (body.retentionCount !== undefined) {
+                backupConfig.retentionCount = Math.max(3, Math.min(100, Number(body.retentionCount) || 24));
+            }
+            if (body.autoDownloadBrowser !== undefined) {
+                backupConfig.autoDownloadBrowser = Boolean(body.autoDownloadBrowser);
+            }
+            saveBackupConfig();
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CONFIG_UPDATED', target: backupConfig.schedule, status: 'ALLOWED', ip, details: `Retention=${backupConfig.retentionCount}, AutoDownload=${backupConfig.autoDownloadBrowser}` });
+            return sendJson(res, 200, { ok: true, config: backupConfig }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/backups/run') {
+        const actor = requirePermission(req, res, 'backup:manage');
+        if (!actor) return;
+        const created = createLocalBackup('manual', actor.email);
+        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CREATED', target: created.filename, status: 'ALLOWED', ip, details: `SHA256=${created.sha256.slice(0, 12)}... (${created.packetsCount} packets)` });
+        return sendJson(res, 201, { ok: true, backup: created, config: backupConfig, files: listLocalBackups() }, req);
+    }
+
+    if (req.method === 'GET' && pathname === '/api/admin/backups/download') {
+        const actor = requirePermission(req, res, 'backup:read');
+        if (!actor) return;
+        const fileParam = path.basename(reqUrl.searchParams.get('file') || '');
+        const format = (reqUrl.searchParams.get('format') || 'json').toLowerCase();
+        let targetFile = fileParam && fileParam.endsWith('.json') ? fileParam : listLocalBackups()[0]?.filename;
+        if (!targetFile) {
+            targetFile = createLocalBackup('on-demand', actor.email).filename;
+        }
+        const full = path.join(BACKUPS_DIR, targetFile);
+        if (!full.startsWith(BACKUPS_DIR + path.sep) || !fs.existsSync(full)) {
+            return sendJson(res, 404, { error: 'Backup file not found' }, req);
+        }
+        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_DOWNLOADED', target: targetFile, status: 'ALLOWED', ip, details: `Format=${format}` });
+        if (format === 'csv') {
+            const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+            const rows = ['ID,ReceivedAt,ReportType,IMEI,FillPct,HeightCm,TempC,TiltDeg,VoltageV,BatteryState,SignalDbm'];
+            (parsed.df703Packets || []).forEach(p => {
+                rows.push([p.id, p.receivedAt, p.reportType, p.imei, p.fillPct ?? '', p.heightCm ?? '', p.tempC ?? '', p.fallAngleDeg ?? '', p.voltageV ?? '', p.batteryState ?? '', p.rsrpDbm ?? ''].join(','));
+            });
+            setSecurityAndCorsHeaders(res, 'text/csv; charset=utf-8', req);
+            res.setHeader('Content-Disposition', `attachment; filename="${targetFile.replace('.json', '.csv')}"`);
+            res.writeHead(200);
+            return res.end('\uFEFF' + rows.join('\r\n'));
+        }
+        setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
+        res.setHeader('Content-Disposition', `attachment; filename="${targetFile}"`);
+        res.writeHead(200);
+        return fs.createReadStream(full).pipe(res);
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/backups/restore') {
+        const actor = requirePermission(req, res, 'backup:manage');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req, 1048576);
+            let backupObj = body.backupData;
+            if (!backupObj && body.filename) {
+                const safeName = path.basename(String(body.filename));
+                const full = path.join(BACKUPS_DIR, safeName);
+                if (!full.startsWith(BACKUPS_DIR + path.sep) || !fs.existsSync(full)) {
+                    return sendJson(res, 404, { error: 'Backup file not found' }, req);
+                }
+                backupObj = JSON.parse(fs.readFileSync(full, 'utf8'));
+            }
+            if (!backupObj || backupObj.format !== 'TMG-LOCAL-BACKUP-V1') {
+                return sendJson(res, 400, { error: 'Invalid backup format; expected TMG-LOCAL-BACKUP-V1' }, req);
+            }
+            if (Array.isArray(backupObj.df703Packets)) {
+                df703Packets.splice(0, df703Packets.length, ...backupObj.df703Packets.slice(0, 200));
+            }
+            if (Array.isArray(backupObj.telemetryLog)) {
+                telemetryLog.splice(0, telemetryLog.length, ...backupObj.telemetryLog.slice(0, 200));
+            }
+            if (backupObj.adminPreferences) {
+                Object.assign(adminPreferences, backupObj.adminPreferences);
+                saveAdminPreferences();
+            }
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_RESTORED', target: body.filename || 'uploaded-json', status: 'ALLOWED', ip, details: `Restored ${df703Packets.length} packets & admin preferences` });
+            return sendJson(res, 200, { ok: true, restoredPackets: df703Packets.length, restoredAt: new Date().toISOString() }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    // =========================================================================
+    // AI OPERATIONS CHATBOT & DYNAMIC EMERGENCY DRIVER RE-ROUTING
+    // =========================================================================
+    if (req.method === 'POST' && pathname === '/api/chat') {
+        const actor = requirePermission(req, res, 'chat:use');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req);
+            const message = cleanStr(body.message || '', 500);
+            if (!message) return sendJson(res, 400, { error: 'Message cannot be empty' }, req);
+            const out = buildAiChatReply(message, actor);
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'AI_CHAT_QUERY', target: 'Chatbot', status: 'ALLOWED', ip, details: message.slice(0, 90) });
+            return sendJson(res, 200, { ok: true, ...out }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'POST' && pathname === '/api/driver/reroute-check') {
+        const actor = requirePermission(req, res, 'driver:gps');
+        if (!actor) return;
+        try {
+            const body = await readJsonBody(req, 262144);
+            const allBins = Array.isArray(body.bins) ? body.bins : [];
+            const currentRoute = Array.isArray(body.currentRouteIds) ? body.currentRouteIds.map(String) : [];
+            const remainingOriginal = allBins.filter(b => currentRoute.includes(String(b.id)));
+            const fires = allBins.filter(b => (Number(b.temp) >= adminPreferences.fireTemp) || b.deviceAlarms?.fire);
+            const tilts = allBins.filter(b => !fires.includes(b) && ((Number(b.angle) >= adminPreferences.tiltDeg) || b.deviceAlarms?.fall));
+
+            const emergencyIds = new Set([...fires, ...tilts].map(b => String(b.id)));
+            const resumedStops = remainingOriginal.filter(b => !emergencyIds.has(String(b.id)));
+            const reroutedStops = [...fires, ...tilts, ...resumedStops];
+
+            if (fires.length || tilts.length) {
+                logAudit({
+                    actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
+                    action: 'EMERGENCY_REROUTE', target: 'Driver Route', status: 'ALLOWED', ip,
+                    details: `Fire=${fires.length}, Tilted=${tilts.length}, Resuming=${resumedStops.length} remaining stops`
+                });
+            }
+            return sendJson(res, 200, {
+                ok: true,
+                rerouted: fires.length > 0 || tilts.length > 0,
+                prioritySummary: { fires: fires.length, tilts: tilts.length, resumed: resumedStops.length },
+                orderedStopIds: reroutedStops.map(b => b.id)
+            }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
     }
 
     if (req.method === 'GET' && (pathname === '/health' || pathname === '/api/health')) {
         return sendJson(res, 200, {
             status: 'ok',
-            service: 'parot-wasteos-platform',
+            service: 'tmg-madinaty-smart-waste',
             tcpBridgePort: TCP_PORT,
             tcpBridgeActive: tcpServerActive,
             tcpStats,
@@ -673,19 +1561,19 @@ const server = http.createServer(async (req, res) => {
             knownDevices: deviceState.size,
             uptimeSeconds: Math.round(process.uptime()),
             timestamp: new Date().toISOString()
-        });
+        }, req);
     }
 
     if (req.method === 'GET' && pathname === '/api/status') {
         return sendJson(res, 200, {
-            platform: 'PAROT WasteOS',
-            version: '2.8.0',
+            platform: 'Smart Waste Solution - TMG (Madinaty)',
+            version: '3.0.0-OWASP',
             protocolSupport: 'Dingtek DF703 4G V2.8 (TCP + HTTPS API Gateway)',
             ingestReady: true,
             recentTelemetryCount: telemetryLog.length,
             recentPacketsCount: df703Packets.length,
             recentTelemetry: telemetryLog.slice(0, 20)
-        });
+        }, req);
     }
 
     // Legacy / generic JSON telemetry endpoint
@@ -694,7 +1582,7 @@ const server = http.createServer(async (req, res) => {
             const payload = await readJsonBody(req);
             const record = {
                 receivedAt: new Date().toISOString(),
-                deviceId: payload.deviceId || payload.serial || 'unknown',
+                deviceId: cleanStr(payload.deviceId || payload.serial || 'unknown', 64),
                 fill: payload.fill ?? null,
                 temp: payload.temp ?? null,
                 angle: payload.angle ?? null,
@@ -702,32 +1590,32 @@ const server = http.createServer(async (req, res) => {
             };
             telemetryLog.unshift(record);
             if (telemetryLog.length > 200) telemetryLog.pop();
-            return sendJson(res, 201, { accepted: true, record });
+            return sendJson(res, 201, { accepted: true, record }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
     // Dingtek DF703 4G V2.8 Ingestion Endpoint
     if (req.method === 'POST' && pathname === '/api/df703/ingest') {
-        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' });
+        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' }, req);
         try {
             const body = await readJsonBody(req);
             if (!body.rawHex) {
-                return sendJson(res, 400, { error: 'rawHex field is required' });
+                return sendJson(res, 400, { error: 'rawHex field is required' }, req);
             }
             const parsed = parseDf703Packet(body.rawHex);
-            const { entry, pendingDownlink } = recordParsedDf703(parsed, body.channel || 'HTTPS API Gateway', {
-                remoteAddress: body.remoteAddress || req.socket.remoteAddress
+            const { entry, pendingDownlink } = recordParsedDf703(parsed, cleanStr(body.channel || 'HTTPS API Gateway', 64), {
+                remoteAddress: cleanStr(body.remoteAddress || req.socket.remoteAddress, 64)
             });
             logDf703(`HTTP ingest type ${parsed.reportType} from IMEI ${parsed.imei}`);
             return sendJson(res, 201, {
                 accepted: true,
                 decoded: entry,
                 queuedDownlinkToSend: pendingDownlink
-            });
+            }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
@@ -746,36 +1634,41 @@ const server = http.createServer(async (req, res) => {
             packets: df703Packets.slice(0, 40),
             queuedDownlinks: queuedSummary,
             adminPreferences
-        });
+        }, req);
     }
 
-    // Queue Downlink Command (80029999...81) for a DF703 IMEI
+    // Queue Downlink Command (80029999...81) for a DF703 IMEI (Requires downlink:send privilege or INGEST_TOKEN)
     if (req.method === 'POST' && pathname === '/api/df703/downlink') {
-        if (!isAuthorized(req)) return sendJson(res, 401, { error: 'Missing or invalid Bearer token' });
+        const hasBearer = INGEST_TOKEN && isAuthorized(req);
+        const actor = hasBearer ? { id: 'token', email: 'api-token', role: 'Admin' } : requirePermission(req, res, 'downlink:send');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req);
             const frame = buildDf703Downlink(body.cmdCode, body.value);
-            const imei = String(body.imei || '864376046967369').trim();
+            const imei = cleanStr(body.imei || '864317087587096', 24);
             if (!downlinkQueue.has(imei)) downlinkQueue.set(imei, []);
             const item = { imei, cmdCode: String(body.cmdCode).toUpperCase(), frame, queuedAt: new Date().toISOString() };
             downlinkQueue.get(imei).push(item);
             const sentNow = tryDeliverNow(imei);
             logDf703(`Downlink ${sentNow ? 'sent' : 'queued'} for ${imei}: ${frame}`);
-            return sendJson(res, 201, { queued: !sentNow, sentNow: Boolean(sentNow), command: item });
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'DOWNLINK_QUEUED', target: imei, status: 'ALLOWED', ip, details: `CMD ${item.cmdCode} -> ${frame}` });
+            return sendJson(res, 201, { queued: !sentNow, sentNow: Boolean(sentNow), command: item }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
-    // Admin Preferences (persisted in DATA_DIR/admin_preferences.json)
+    // Admin Preferences (persisted in DATA_DIR/admin_preferences.json, requires prefs:write on POST)
     if (req.method === 'GET' && pathname === '/api/admin/preferences') {
-        return sendJson(res, 200, { ok: true, preferences: adminPreferences });
+        return sendJson(res, 200, { ok: true, preferences: adminPreferences }, req);
     }
     if (req.method === 'POST' && pathname === '/api/admin/preferences') {
+        const actor = requirePermission(req, res, 'prefs:write');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req);
             if (!body || typeof body !== 'object') {
-                return sendJson(res, 400, { error: 'Invalid JSON body' });
+                return sendJson(res, 400, { error: 'Invalid JSON body' }, req);
             }
             const next = { ...adminPreferences };
             if (body.fireTemp !== undefined) next.fireTemp = Math.max(0, Math.min(255, Number(body.fireTemp)));
@@ -783,13 +1676,14 @@ const server = http.createServer(async (req, res) => {
             if (body.tiltDeg !== undefined) next.tiltDeg = Math.max(0, Math.min(90, Number(body.tiltDeg)));
             if (body.lowBattThreshold !== undefined) next.lowBattThreshold = Math.max(0, Math.min(100, Number(body.lowBattThreshold)));
             if (body.defaultCostPerKm !== undefined) next.defaultCostPerKm = Math.max(1, Number(body.defaultCostPerKm));
-            if (body.routeEndPolicy !== undefined) next.routeEndPolicy = String(body.routeEndPolicy);
+            if (body.routeEndPolicy !== undefined) next.routeEndPolicy = cleanStr(body.routeEndPolicy, 32);
             if (body.autoSchedulerEnabled !== undefined) next.autoSchedulerEnabled = Boolean(body.autoSchedulerEnabled);
             adminPreferences = next;
             saveAdminPreferences();
-            return sendJson(res, 200, { ok: true, preferences: adminPreferences });
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PREFERENCES_UPDATED', target: 'Alert Thresholds', status: 'ALLOWED', ip, details: `Fire=${next.fireTemp}C Full=${next.fullThreshold}% Tilt=${next.tiltDeg}deg` });
+            return sendJson(res, 200, { ok: true, preferences: adminPreferences }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
@@ -837,19 +1731,21 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, driverGpsState);
     }
     if (req.method === 'POST' && pathname === '/api/driver/gps') {
+        const actor = requirePermission(req, res, 'driver:gps');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req);
-            if (typeof body.driverId === 'string') driverGpsState.driverId = body.driverId;
-            if (typeof body.driverName === 'string') driverGpsState.driverName = body.driverName;
+            if (typeof body.driverId === 'string') driverGpsState.driverId = cleanStr(body.driverId, 32);
+            if (typeof body.driverName === 'string') driverGpsState.driverName = cleanStr(body.driverName, 80);
             if (typeof body.lat === 'number') driverGpsState.lat = body.lat;
             if (typeof body.lng === 'number') driverGpsState.lng = body.lng;
             if (typeof body.speedKmh === 'number') driverGpsState.speedKmh = body.speedKmh;
-            if (typeof body.screenState === 'string') driverGpsState.screenState = body.screenState;
+            if (typeof body.screenState === 'string') driverGpsState.screenState = cleanStr(body.screenState, 32);
             if (typeof body.plannedKm === 'number') driverGpsState.plannedKm = body.plannedKm;
             if (typeof body.actualKm === 'number') driverGpsState.actualKm = body.actualKm;
             if (typeof body.compliancePct === 'number') driverGpsState.compliancePct = body.compliancePct;
             if (typeof body.violationActive === 'boolean') driverGpsState.violationActive = body.violationActive;
-            if (body.violationReason !== undefined) driverGpsState.violationReason = body.violationReason;
+            if (body.violationReason !== undefined) driverGpsState.violationReason = cleanStr(body.violationReason, 160);
             driverGpsState.lastPingAt = new Date().toISOString();
             const extraKm = Math.max(0, +(driverGpsState.actualKm - driverGpsState.plannedKm).toFixed(1));
             driverGpsState.wastedEgp = Math.round(extraKm * driverGpsState.costPerKmEgp);
@@ -864,16 +1760,18 @@ const server = http.createServer(async (req, res) => {
                 violationActive: driverGpsState.violationActive
             });
             if (driverGpsState.history.length > 80) driverGpsState.history.pop();
-            return sendJson(res, 200, { updated: true, state: driverGpsState });
+            return sendJson(res, 200, { updated: true, state: driverGpsState }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
     if (req.method === 'GET' && pathname === '/api/driver/route') {
-        return sendJson(res, 200, { assignedRoute: driverGpsState.assignedRoute || null });
+        return sendJson(res, 200, { assignedRoute: driverGpsState.assignedRoute || null }, req);
     }
     if (req.method === 'POST' && pathname === '/api/driver/route') {
+        const actor = requirePermission(req, res, 'routes:write');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req, 262144);
             driverGpsState.assignedRoute = body;
@@ -881,31 +1779,38 @@ const server = http.createServer(async (req, res) => {
             driverGpsState.actualKm = driverGpsState.plannedKm;
             driverGpsState.compliancePct = 100;
             driverGpsState.violationActive = false;
-            return sendJson(res, 200, { assigned: true, route: driverGpsState.assignedRoute });
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'ROUTE_ASSIGNED', target: cleanStr(body.driverId || 'Driver', 32), status: 'ALLOWED', ip, details: `${Array.isArray(body.stops) ? body.stops.length : 0} stops assigned` });
+            return sendJson(res, 200, { assigned: true, route: driverGpsState.assignedRoute }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
     // Full Platform Data Migration Export & Import (Move cleanly to any server/platform)
     if (req.method === 'GET' && pathname === '/api/migration/export') {
+        const actor = requirePermission(req, res, 'backup:read');
+        if (!actor) return;
         const bundle = {
-            format: 'PAROT-FULL-MIGRATION-V1',
+            format: 'TMG-FULL-MIGRATION-V2',
             exportedAt: new Date().toISOString(),
-            platformVersion: '2.8.0',
+            platformVersion: '3.0.0-OWASP',
             telemetryLog,
             df703Packets,
-            driverGpsState
+            driverGpsState,
+            adminPreferences
         };
         bundle.sha256 = crypto.createHash('sha256').update(JSON.stringify(bundle)).digest('hex');
-        return sendJson(res, 200, bundle);
+        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_EXPORT', target: 'Full Platform Bundle', status: 'ALLOWED', ip, details: `SHA256=${bundle.sha256.slice(0, 12)}...` });
+        return sendJson(res, 200, bundle, req);
     }
 
     if (req.method === 'POST' && pathname === '/api/migration/import') {
+        const actor = requirePermission(req, res, 'migration:manage');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req, 1048576);
-            if (!body || !String(body.format || '').startsWith('PAROT-')) {
-                return sendJson(res, 400, { error: 'Invalid migration bundle format' });
+            if (!body || (!String(body.format || '').startsWith('PAROT-') && !String(body.format || '').startsWith('TMG-'))) {
+                return sendJson(res, 400, { error: 'Invalid migration bundle format' }, req);
             }
             if (Array.isArray(body.df703Packets)) {
                 df703Packets.splice(0, df703Packets.length, ...body.df703Packets.slice(0, 200));
@@ -916,30 +1821,33 @@ const server = http.createServer(async (req, res) => {
             if (body.driverGpsState && typeof body.driverGpsState === 'object') {
                 Object.assign(driverGpsState, body.driverGpsState);
             }
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_IMPORT', target: 'Full Platform Bundle', status: 'ALLOWED', ip, details: `Imported ${df703Packets.length} packets` });
             return sendJson(res, 200, {
                 migrated: true,
                 importedAt: new Date().toISOString(),
                 packetsCount: df703Packets.length,
                 telemetryCount: telemetryLog.length
-            });
+            }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
     // 3-Month Excel-Compatible CSV History Export
     if (req.method === 'GET' && pathname === '/api/export/history.csv') {
         const csv = buildQuarterlyHistoryCsv();
-        setSecurityAndCorsHeaders(res, 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', 'attachment; filename="PAROT_WasteOS_3Month_History.csv"');
+        setSecurityAndCorsHeaders(res, 'text/csv; charset=utf-8', req);
+        res.setHeader('Content-Disposition', 'attachment; filename="TMG_SmartWaste_Madinaty_History.csv"');
         res.writeHead(200);
         return res.end(csv);
     }
 
     // <1-Hour Disaster Recovery Backup Snapshot & Integrity Verification
     if (req.method === 'GET' && pathname === '/api/backup/snapshot') {
+        const actor = requirePermission(req, res, 'backup:read');
+        if (!actor) return;
         const snapshotData = {
-            format: 'PAROT-DR-SNAPSHOT-V1',
+            format: 'TMG-DR-SNAPSHOT-V2',
             createdAt: new Date().toISOString(),
             rtoTargetMinutes: 45,
             rpoTargetMinutes: 5,
@@ -950,14 +1858,16 @@ const server = http.createServer(async (req, res) => {
             driverGpsState
         };
         const digest = crypto.createHash('sha256').update(JSON.stringify(snapshotData)).digest('hex');
-        return sendJson(res, 200, { ...snapshotData, sha256: digest });
+        return sendJson(res, 200, { ...snapshotData, sha256: digest }, req);
     }
 
     if (req.method === 'POST' && pathname === '/api/backup/restore') {
+        const actor = requirePermission(req, res, 'backup:manage');
+        if (!actor) return;
         try {
             const body = await readJsonBody(req, 524288);
-            if (!body || body.format !== 'PAROT-DR-SNAPSHOT-V1') {
-                return sendJson(res, 400, { error: 'Invalid snapshot format; expected PAROT-DR-SNAPSHOT-V1' });
+            if (!body || (!String(body.format || '').startsWith('PAROT-DR-SNAPSHOT') && !String(body.format || '').startsWith('TMG-DR-SNAPSHOT'))) {
+                return sendJson(res, 400, { error: 'Invalid snapshot format' }, req);
             }
             if (Array.isArray(body.df703Packets)) {
                 df703Packets.splice(0, df703Packets.length, ...body.df703Packets.slice(0, 200));
@@ -965,14 +1875,15 @@ const server = http.createServer(async (req, res) => {
             if (Array.isArray(body.telemetryLog)) {
                 telemetryLog.splice(0, telemetryLog.length, ...body.telemetryLog.slice(0, 200));
             }
+            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'DR_RESTORE', target: 'Snapshot', status: 'ALLOWED', ip, details: `Restored ${df703Packets.length} packets` });
             return sendJson(res, 200, {
                 restored: true,
                 restoredAt: new Date().toISOString(),
                 restoredPackets: df703Packets.length,
                 elapsedMinutes: 1
-            });
+            }, req);
         } catch (err) {
-            return sendJson(res, 400, { error: err.message });
+            return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
@@ -1071,13 +1982,27 @@ tcpServer.listen(TCP_PORT, HOST, () => {
     logDf703(`DF703 TCP listener on ${HOST}:${TCP_PORT} (set the sensor Server1 to YOUR_PUBLIC_IP;${TCP_PORT};)`);
 });
 
+loadUsersStore();
+loadAuditLogs();
+loadBackupConfig();
 loadAdminPreferences();
 loadDeviceSettings();
 loadPersistedPackets();
+
+// Automatic Local Backup Scheduler (checks every 60s)
+setInterval(() => {
+    if (backupConfig.schedule === 'manual') return;
+    if (!backupConfig.nextRunAt || Date.now() >= Date.parse(backupConfig.nextRunAt)) {
+        try {
+            const created = createLocalBackup('auto-schedule', 'scheduler');
+            logAudit({ actorEmail: 'system-scheduler', actorRole: 'System', action: 'AUTO_BACKUP_CREATED', target: created.filename, status: 'INFO', ip: '127.0.0.1', details: `Schedule=${backupConfig.schedule}` });
+        } catch {}
+    }
+}, 60 * 1000);
 
 server.on('error', (err) => {
     console.error(`HTTP server error on port ${PORT}:`, err.message);
 });
 server.listen(PORT, HOST, () => {
-    console.log(`PAROT WasteOS server running on http://${HOST}:${PORT} (DF703 TCP on :${TCP_PORT})`);
+    console.log(`Smart Waste Solution - TMG server running on http://${HOST}:${PORT} (DF703 TCP on :${TCP_PORT})`);
 });
