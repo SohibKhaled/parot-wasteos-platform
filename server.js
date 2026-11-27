@@ -75,6 +75,265 @@ const AUDIT_FILE = path.join(DATA_DIR, 'audit_logs.jsonl');
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const BACKUP_CONFIG_FILE = path.join(DATA_DIR, 'backup_config.json');
 const SESSION_SECRET_FILE = path.join(DATA_DIR, '.session_secret');
+const TENANTS_FILE = path.join(DATA_DIR, 'tenants.json');
+const TENANT_STATES_FILE = path.join(DATA_DIR, 'tenant_states.json');
+
+const DEFAULT_CORRIDOR_TOLERANCE_M = 120;
+
+const DEFAULT_TENANTS = [
+    {
+        id: 'tmg',
+        title: 'Smart Waste Solution — TMG',
+        shortName: 'TMG • Madinaty',
+        sub: 'Madinaty Compound',
+        city: 'New Cairo',
+        hardwareMode: 'live',
+        color: '#D97706',
+        sec: '#EC4899',
+        center: [30.0955, 31.6480],
+        zoom: 14,
+        anchors: {
+            depot: [30.1045, 31.6225, 'Madinaty Truck Garage'],
+            landfill: [30.0885, 31.6690, 'East Unloading & Recycling Hub'],
+            streets: [
+                [30.0985, 31.6352, 'Central Spine Road'], [30.0954, 31.6448, 'Madinaty East Blvd'],
+                [30.0928, 31.6535, 'B10 Market Street'], [30.1018, 31.6295, 'South Park Way'],
+                [30.0905, 31.6380, 'Gate 2 Avenue'], [30.0940, 31.6602, 'Craft Area Loop'],
+                [30.1060, 31.6388, 'Open Air Mall'], [30.0972, 31.6400, 'B1 Neighborhood'],
+                [30.0962, 31.6512, 'B8 East Ring'], [30.1012, 31.6470, 'Talaat Moustafa Axis']
+            ]
+        },
+        drivers: [
+            { id: 'd1', name: 'Ahmed Mostafa', truck: 'Truck #101 (Actros)', homeDepot: 'Madinaty Truck Garage' },
+            { id: 'd2', name: 'Khaled Mansour', truck: 'Truck #102 (Isuzu)', homeDepot: 'Madinaty Truck Garage' }
+        ],
+        seedBins: [
+            {
+                id: 1, code: 'B-LIVE-01', name: 'LIVE DF703 • Central Spine', street: 'Central Spine Road',
+                category: 'Smart Curb Bin 660L (Live Hardware)', lat: 30.0985, lng: 31.6352,
+                fill: 0, heightCm: 120, temp: 24, angle: 0, battery: 100, voltageV: 3.6, rssi: -65,
+                imei: '864317087587096', serial: '864317087587096', model: 'DF703 4G Live Sensor', isLive: true
+            }
+        ]
+    },
+    {
+        id: 'palm_hills',
+        title: 'Palm Hills — Smart Waste',
+        shortName: 'Palm Hills • New Cairo',
+        sub: '5th Settlement Compound',
+        city: 'New Cairo',
+        hardwareMode: 'demo',
+        color: '#10B981',
+        sec: '#06B6D4',
+        center: [30.0255, 31.4910],
+        zoom: 14,
+        anchors: {
+            depot: [30.0365, 31.4720, 'Palm Hills Fleet Yard'],
+            landfill: [30.0110, 31.5180, 'New Cairo Eco Transfer Hub'],
+            streets: [
+                [30.0295, 31.4835, 'Palm Central Promenade'], [30.0245, 31.4915, 'Clubhouse Ring Rd'],
+                [30.0210, 31.5005, 'Villa Sector East'], [30.0318, 31.4960, 'Commercial Gate 3'],
+                [30.0185, 31.4840, 'Lake View Parkway'], [30.0272, 31.5055, 'Golf Villas Loop']
+            ]
+        },
+        drivers: [
+            { id: 'ph-d1', name: 'Hossam El-Din', truck: 'Truck #201 (Mercedes)', homeDepot: 'Palm Hills Fleet Yard' },
+            { id: 'ph-d2', name: 'Tarek Nabil', truck: 'Truck #202 (Isuzu)', homeDepot: 'Palm Hills Fleet Yard' }
+        ],
+        seedBins: [
+            { id: 101, code: 'PH-01', name: 'PH-01 • Palm Central Promenade', street: 'Palm Central Promenade', category: 'Underground Compactor 1100L', lat: 30.0295, lng: 31.4835, fill: 92, heightCm: 10, temp: 29, angle: 2, battery: 89, voltageV: 3.55, rssi: -68, imei: '860761079948201', serial: '860761079948201', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 102, code: 'PH-02', name: 'PH-02 • Clubhouse Ring Rd', street: 'Clubhouse Ring Rd', category: 'Smart Curb Bin 660L', lat: 30.0245, lng: 31.4915, fill: 84, heightCm: 19, temp: 31, angle: 3, battery: 94, voltageV: 3.58, rssi: -71, imei: '860761079948202', serial: '860761079948202', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 103, code: 'PH-03', name: 'PH-03 • Villa Sector East', street: 'Villa Sector East', category: 'Smart Curb Bin 660L', lat: 30.0210, lng: 31.5005, fill: 64, heightCm: 43, temp: 27, angle: 1, battery: 78, voltageV: 3.49, rssi: -74, imei: '860761079948203', serial: '860761079948203', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 104, code: 'PH-04', name: 'PH-04 • Commercial Gate 3', street: 'Commercial Gate 3', category: 'Commercial Bin 1100L', lat: 30.0318, lng: 31.4960, fill: 88, heightCm: 14, temp: 61, angle: 4, battery: 82, voltageV: 3.52, rssi: -69, imei: '860761079948204', serial: '860761079948204', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 105, code: 'PH-05', name: 'PH-05 • Lake View Parkway', street: 'Lake View Parkway', category: 'Smart Curb Bin 240L', lat: 30.0185, lng: 31.4840, fill: 34, heightCm: 79, temp: 25, angle: 0, battery: 96, voltageV: 3.60, rssi: -64, imei: '860761079948205', serial: '860761079948205', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 106, code: 'PH-06', name: 'PH-06 • Golf Villas Loop', street: 'Golf Villas Loop', category: 'Smart Curb Bin 660L', lat: 30.0272, lng: 31.5055, fill: 51, heightCm: 59, temp: 26, angle: 44, battery: 72, voltageV: 3.46, rssi: -79, imei: '860761079948206', serial: '860761079948206', model: 'DF703 Pilot (Demo)', isLive: false }
+        ]
+    },
+    {
+        id: 'kafd',
+        title: 'KAFD — Smart District',
+        shortName: 'KAFD • Riyadh',
+        sub: 'Financial District Ops',
+        city: 'Riyadh',
+        hardwareMode: 'demo',
+        color: '#3B82F6',
+        sec: '#8B5CF6',
+        center: [24.7640, 46.6420],
+        zoom: 14,
+        anchors: {
+            depot: [24.7760, 46.6250, 'KAFD North Fleet Base'],
+            landfill: [24.7380, 46.6690, 'Riyadh Eco Sorting Hub'],
+            streets: [
+                [24.7640, 46.6420, 'KAFD Ring Road'], [24.7565, 46.6485, 'Al Thumamah Plaza'],
+                [24.7695, 46.6370, 'Metro Station North'], [24.7590, 46.6345, 'Financial Tower Row'],
+                [24.7520, 46.6530, 'East Promenade'], [24.7715, 46.6495, 'Conference Center Way']
+            ]
+        },
+        drivers: [
+            { id: 'kf-d1', name: 'Tariq Al-Otaibi', truck: 'Truck #301 (MAN)', homeDepot: 'KAFD North Fleet Base' },
+            { id: 'kf-d2', name: 'Fahad Al-Harbi', truck: 'Truck #302 (Volvo)', homeDepot: 'KAFD North Fleet Base' }
+        ],
+        seedBins: [
+            { id: 201, code: 'KF-01', name: 'KF-01 • KAFD Ring Road', street: 'KAFD Ring Road', category: 'Smart Solar Compactor', lat: 24.7640, lng: 46.6420, fill: 89, heightCm: 13, temp: 33, angle: 1, battery: 95, voltageV: 3.59, rssi: -66, imei: '860761079948301', serial: '860761079948301', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 202, code: 'KF-02', name: 'KF-02 • Al Thumamah Plaza', street: 'Al Thumamah Plaza', category: 'Smart Solar Compactor', lat: 24.7565, lng: 46.6485, fill: 76, heightCm: 29, temp: 30, angle: 2, battery: 91, voltageV: 3.56, rssi: -70, imei: '860761079948302', serial: '860761079948302', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 203, code: 'KF-03', name: 'KF-03 • Metro Station North', street: 'Metro Station North', category: 'Smart Curb Bin 660L', lat: 24.7695, lng: 46.6370, fill: 94, heightCm: 7, temp: 34, angle: 0, battery: 88, voltageV: 3.54, rssi: -67, imei: '860761079948303', serial: '860761079948303', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 204, code: 'KF-04', name: 'KF-04 • Financial Tower Row', street: 'Financial Tower Row', category: 'Smart Curb Bin 660L', lat: 24.7590, lng: 46.6345, fill: 28, heightCm: 86, temp: 28, angle: 0, battery: 97, voltageV: 3.60, rssi: -63, imei: '860761079948304', serial: '860761079948304', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 205, code: 'KF-05', name: 'KF-05 • East Promenade', street: 'East Promenade', category: 'Commercial Bin 1100L', lat: 24.7520, lng: 46.6530, fill: 58, heightCm: 50, temp: 29, angle: 1, battery: 83, voltageV: 3.52, rssi: -73, imei: '860761079948305', serial: '860761079948305', model: 'DF703 Pilot (Demo)', isLive: false },
+            { id: 206, code: 'KF-06', name: 'KF-06 • Conference Center Way', street: 'Conference Center Way', category: 'Smart Curb Bin 660L', lat: 24.7715, lng: 46.6495, fill: 82, heightCm: 22, temp: 31, angle: 41, battery: 69, voltageV: 3.44, rssi: -76, imei: '860761079948306', serial: '860761079948306', model: 'DF703 Pilot (Demo)', isLive: false }
+        ]
+    }
+];
+
+let tenantsStore = JSON.parse(JSON.stringify(DEFAULT_TENANTS));
+const tenantStates = new Map();
+const imeiToTenant = new Map([['864317087587096', 'tmg']]);
+
+function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = (b[0] - a[0]) * Math.PI / 180;
+    const dLng = (b[1] - a[1]) * Math.PI / 180;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+function distancePointToSegmentM(lat, lng, a, b) {
+    const refLatRad = ((a[0] + b[0] + lat) / 3) * Math.PI / 180;
+    const mPerDegLat = 111132;
+    const mPerDegLng = 111320 * Math.cos(refLatRad);
+    const px = (lng - a[1]) * mPerDegLng;
+    const py = (lat - a[0]) * mPerDegLat;
+    const bx = (b[1] - a[1]) * mPerDegLng;
+    const by = (b[0] - a[0]) * mPerDegLat;
+    const lenSq = bx * bx + by * by;
+    if (lenSq <= 0.0001) return Math.hypot(px, py);
+    const t = Math.max(0, Math.min(1, (px * bx + py * by) / lenSq));
+    return Math.hypot(px - t * bx, py - t * by);
+}
+
+function distanceToPolylineM(lat, lng, coords) {
+    if (!Array.isArray(coords) || coords.length === 0) return null;
+    if (coords.length === 1) return Math.round(haversineKm([lat, lng], coords[0]) * 1000);
+    let minM = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const d = distancePointToSegmentM(lat, lng, coords[i], coords[i + 1]);
+        if (d < minM) minM = d;
+    }
+    return Math.round(minM);
+}
+
+function buildDefaultDriverState(tenant, drv) {
+    const depot = tenant.anchors?.depot || [30.1045, 31.6225, 'Depot'];
+    return {
+        driverId: drv.id,
+        driverName: drv.name,
+        truck: drv.truck,
+        homeDepot: drv.homeDepot || depot[2],
+        lat: depot[0],
+        lng: depot[1],
+        speedKmh: 0,
+        headingDeg: 0,
+        accuracyM: null,
+        screenState: 'standby',
+        mode: 'standby',
+        activeShift: false,
+        lastPingAt: null,
+        plannedKm: 16.5,
+        actualKm: 0,
+        costPerKmEgp: 14,
+        savedEgp: 222,
+        wastedEgp: 0,
+        onRoute: true,
+        distanceFromRouteM: 0,
+        compliancePct: 100,
+        violationActive: false,
+        violationReason: '',
+        deviationsCount: 0,
+        onRoutePings: 0,
+        totalPings: 0,
+        assignedRoute: null,
+        actualTrail: [],
+        stopsCompleted: [],
+        stopsSkipped: [],
+        tankLoadPct: 0,
+        events: []
+    };
+}
+
+function ensureTenantState(tenantId) {
+    const t = tenantsStore.find(x => x.id === tenantId) || tenantsStore[0];
+    if (tenantStates.has(t.id)) return tenantStates.get(t.id);
+    const driverStates = {};
+    (t.drivers || []).forEach(drv => {
+        driverStates[drv.id] = buildDefaultDriverState(t, drv);
+    });
+    const state = {
+        tenantId: t.id,
+        preferences: {
+            fireTemp: 55,
+            fullThreshold: 80,
+            tiltDeg: 35,
+            lowBattThreshold: 35,
+            defaultCostPerKm: 14,
+            routeEndPolicy: 'round_trip',
+            autoSchedulerEnabled: true,
+            corridorToleranceM: DEFAULT_CORRIDOR_TOLERANCE_M
+        },
+        anchors: JSON.parse(JSON.stringify(t.anchors)),
+        drivers: JSON.parse(JSON.stringify(t.drivers || [])),
+        activeDriverId: t.drivers?.[0]?.id || 'd1',
+        driverStates,
+        bins: JSON.parse(JSON.stringify(t.seedBins || [])),
+        schedules: [
+            { title: `${t.sub} Morning Sweep`, zone: t.sub, rule: 'Every Day at 05:30 • Bins 75%+ full', driver: t.drivers?.[0]?.name || 'Driver #1', type: 'Auto AI', enabled: true },
+            { title: `${t.sub} Evening Loop`, zone: t.sub, rule: 'Every Day at 23:00 • Bins 80%+ full', driver: t.drivers?.[1]?.name || t.drivers?.[0]?.name || 'Driver #2', type: 'Auto AI', enabled: true },
+            { title: 'Instant Heat & Safety Check', zone: t.sub, rule: 'Runs immediately if Heat exceeds 55°C', driver: 'Nearest Active Truck', type: 'Auto AI', enabled: true }
+        ],
+        pendingDevices: t.hardwareMode === 'live'
+            ? [{ serial: '860761079948102', signal: 'Strong', area: t.sub }]
+            : [{ serial: `8607610799${t.id.slice(0, 2).toUpperCase()}01`, signal: 'Strong', area: t.sub }]
+    };
+    tenantStates.set(t.id, state);
+    return state;
+}
+
+function saveTenantsAndStates() {
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(TENANTS_FILE, JSON.stringify(tenantsStore, null, 2));
+        const obj = {};
+        for (const [k, v] of tenantStates.entries()) obj[k] = v;
+        fs.writeFileSync(TENANT_STATES_FILE, JSON.stringify(obj, null, 2));
+    } catch {}
+}
+
+function loadTenantsAndStates() {
+    try {
+        if (fs.existsSync(TENANTS_FILE)) {
+            const loaded = JSON.parse(fs.readFileSync(TENANTS_FILE, 'utf8'));
+            if (Array.isArray(loaded) && loaded.length) tenantsStore = loaded;
+        }
+    } catch {}
+    try {
+        if (fs.existsSync(TENANT_STATES_FILE)) {
+            const loaded = JSON.parse(fs.readFileSync(TENANT_STATES_FILE, 'utf8'));
+            if (loaded && typeof loaded === 'object') {
+                Object.entries(loaded).forEach(([k, v]) => tenantStates.set(k, v));
+            }
+        }
+    } catch {}
+    tenantsStore.forEach(t => {
+        ensureTenantState(t.id);
+        (t.seedBins || []).forEach(b => { if (b.imei) imeiToTenant.set(b.imei, t.id); });
+    });
+}
+
+function getTenantById(tenantId) {
+    return tenantsStore.find(t => t.id === tenantId) || tenantsStore[0];
+}
+
+function resolvePacketTenant(imei) {
+    return imeiToTenant.get(String(imei || '')) || 'tmg';
+}
 
 let deviceSettings = {};                 // imei -> { binDepthMm }
 let adminPreferences = {
@@ -435,6 +694,8 @@ function signSessionToken(user) {
         email: user.email,
         name: user.name,
         role: user.role,
+        tenantId: user.tenantId || 'tmg',
+        canSwitchTenants: Boolean(user.canSwitchTenants),
         exp: Date.now() + SESSION_TTL_MS
     };
     const payloadB64 = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
@@ -492,11 +753,16 @@ function userHasPermission(user, perm) {
 }
 
 function sanitizeUserPublic(u) {
+    const t = getTenantById(u.tenantId || 'tmg');
     return {
         id: u.id,
         name: u.name,
         email: u.email,
         role: u.role,
+        tenantId: u.tenantId || 'tmg',
+        tenantName: t?.shortName || t?.title || 'TMG • Madinaty',
+        canSwitchTenants: Boolean(u.canSwitchTenants),
+        assignedDriverId: u.assignedDriverId || null,
         status: u.status,
         permissions: u.permissions || ROLE_DEFAULT_PERMISSIONS[u.role] || [],
         requestedNote: u.requestedNote || '',
@@ -512,6 +778,7 @@ function logAudit(event) {
     const rec = {
         id: ++auditSeq,
         at: new Date().toISOString(),
+        tenantId: cleanStr(event.tenantId || 'tmg', 40),
         actorId: event.actorId || null,
         actorEmail: cleanStr(event.actorEmail || 'anonymous', 120),
         actorRole: cleanStr(event.actorRole || 'Public', 40),
@@ -551,23 +818,16 @@ function saveUsersStore() {
 }
 
 function loadUsersStore() {
-    try {
-        if (fs.existsSync(USERS_FILE)) {
-            const loaded = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-            if (Array.isArray(loaded) && loaded.length) {
-                usersStore = loaded;
-                return;
-            }
-        }
-    } catch {}
     const now = new Date().toISOString();
-    usersStore = [
+    const defaultUsers = [
         {
             id: 'u-admin-1',
-            name: 'TMG Madinaty Admin',
+            name: 'Platform Super Admin',
             email: 'admin@tmg-madinaty.com',
             passwordHash: hashPassword('TmgAdmin#2026'),
             role: 'Admin',
+            tenantId: 'tmg',
+            canSwitchTenants: true,
             status: 'approved',
             permissions: [...ALL_PERMISSIONS],
             createdAt: now,
@@ -580,6 +840,8 @@ function loadUsersStore() {
             email: 'ops@tmg-madinaty.com',
             passwordHash: hashPassword('TmgOps#2026'),
             role: 'Supervisor',
+            tenantId: 'tmg',
+            canSwitchTenants: false,
             status: 'approved',
             permissions: [...ROLE_DEFAULT_PERMISSIONS.Supervisor],
             createdAt: now,
@@ -592,6 +854,9 @@ function loadUsersStore() {
             email: 'driver101@tmg-madinaty.com',
             passwordHash: hashPassword('TmgDriver#2026'),
             role: 'Driver',
+            tenantId: 'tmg',
+            canSwitchTenants: false,
+            assignedDriverId: 'd1',
             status: 'approved',
             permissions: [...ROLE_DEFAULT_PERMISSIONS.Driver],
             createdAt: now,
@@ -604,13 +869,79 @@ function loadUsersStore() {
             email: 'audit@tmg-madinaty.com',
             passwordHash: hashPassword('TmgAudit#2026'),
             role: 'Auditor',
+            tenantId: 'tmg',
+            canSwitchTenants: false,
             status: 'approved',
             permissions: [...ROLE_DEFAULT_PERMISSIONS.Auditor],
             createdAt: now,
             approvedAt: now,
             approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-ph-admin',
+            name: 'Palm Hills Admin',
+            email: 'admin@palmhills.demo',
+            passwordHash: hashPassword('PalmAdmin#2026'),
+            role: 'Admin',
+            tenantId: 'palm_hills',
+            canSwitchTenants: false,
+            status: 'approved',
+            permissions: [...ALL_PERMISSIONS],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-ph-drv',
+            name: 'Hossam El-Din (#201)',
+            email: 'driver201@palmhills.demo',
+            passwordHash: hashPassword('PalmDriver#2026'),
+            role: 'Driver',
+            tenantId: 'palm_hills',
+            canSwitchTenants: false,
+            assignedDriverId: 'ph-d1',
+            status: 'approved',
+            permissions: [...ROLE_DEFAULT_PERMISSIONS.Driver],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
+        },
+        {
+            id: 'u-kf-admin',
+            name: 'KAFD Admin',
+            email: 'admin@kafd.demo',
+            passwordHash: hashPassword('KafdAdmin#2026'),
+            role: 'Admin',
+            tenantId: 'kafd',
+            canSwitchTenants: false,
+            status: 'approved',
+            permissions: [...ALL_PERMISSIONS],
+            createdAt: now,
+            approvedAt: now,
+            approvedBy: 'system-bootstrap'
         }
     ];
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            const loaded = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+            if (Array.isArray(loaded) && loaded.length) {
+                usersStore = loaded.map(u => ({
+                    ...u,
+                    tenantId: u.tenantId || 'tmg',
+                    canSwitchTenants: u.canSwitchTenants ?? (u.email === 'admin@tmg-madinaty.com'),
+                    assignedDriverId: u.assignedDriverId || (u.role === 'Driver' ? 'd1' : null)
+                }));
+                defaultUsers.forEach(def => {
+                    if (!usersStore.some(u => u.email.toLowerCase() === def.email.toLowerCase())) {
+                        usersStore.push(def);
+                    }
+                });
+                saveUsersStore();
+                return;
+            }
+        }
+    } catch {}
+    usersStore = defaultUsers;
     saveUsersStore();
 }
 
@@ -673,23 +1004,29 @@ function listLocalBackups() {
     }
 }
 
-function createLocalBackup(trigger = 'manual', actor = 'system') {
+function createLocalBackup(trigger = 'manual', actor = 'system', tenantId = 'tmg') {
     fs.mkdirSync(BACKUPS_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `tmg-backup-${stamp}.json`;
+    const safeTid = cleanStr(tenantId || 'tmg', 32).replace(/[^a-zA-Z0-9_-]/g, '') || 'tmg';
+    const filename = `${safeTid}-backup-${stamp}.json`;
+    const ts = ensureTenantState(safeTid);
+    const tMeta = getTenantById(safeTid);
+    const tenantPackets = df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === safeTid).slice(0, 200);
     const core = {
         format: 'TMG-LOCAL-BACKUP-V1',
-        platform: 'Smart Waste Solution - TMG (Madinaty)',
+        tenantId: safeTid,
+        platform: tMeta?.title || 'Smart Waste Solution',
         createdAt: new Date().toISOString(),
         trigger,
         actor,
-        adminPreferences,
+        adminPreferences: ts.preferences,
+        anchors: ts.anchors,
         deviceSettings,
-        df703Packets: df703Packets.slice(0, 200),
-        telemetryLog: telemetryLog.slice(0, 200),
-        driverGpsState,
-        users: usersStore.map(sanitizeUserPublic),
-        auditLogsCount: auditLogs.length
+        df703Packets: tenantPackets,
+        telemetryLog: telemetryLog.filter(x => (x.tenantId || 'tmg') === safeTid).slice(0, 200),
+        driverStates: ts.driverStates,
+        users: usersStore.filter(u => (u.tenantId || 'tmg') === safeTid).map(sanitizeUserPublic),
+        auditLogsCount: auditLogs.filter(a => (a.tenantId || 'tmg') === safeTid).length
     };
     const sha256 = crypto.createHash('sha256').update(JSON.stringify(core)).digest('hex');
     const payload = { ...core, sha256 };
@@ -705,7 +1042,7 @@ function createLocalBackup(trigger = 'manual', actor = 'system') {
     backupConfig.lastRunAt = core.createdAt;
     backupConfig.nextRunAt = computeNextBackupIso(backupConfig.schedule);
     saveBackupConfig();
-    return { filename, sha256, createdAt: core.createdAt, packetsCount: core.df703Packets.length };
+    return { filename, sha256, tenantId: safeTid, createdAt: core.createdAt, packetsCount: core.df703Packets.length };
 }
 
 function requirePermission(req, res, perm) {
@@ -743,7 +1080,7 @@ function setSecurityAndCorsHeaders(res, contentType, req) {
         res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, X-PAROT-Signature');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, X-PAROT-Signature, X-Tenant-Id');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0');
@@ -753,11 +1090,13 @@ function setSecurityAndCorsHeaders(res, contentType, req) {
     res.setHeader(
         'Content-Security-Policy',
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; " +
+        "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; " +
+        "worker-src 'self' blob:; " +
+        "child-src 'self' blob:; " +
         "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com https://fonts.googleapis.com; " +
         "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; " +
-        "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://server.arcgisonline.com https://*.basemaps.cartocdn.com; " +
-        "connect-src 'self' https://router.project-osrm.org; " +
+        "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tiles.openfreemap.org; " +
+        "connect-src 'self' blob: data: https://router.project-osrm.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tiles.openfreemap.org https://unpkg.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
     );
 }
@@ -843,11 +1182,13 @@ function persistEntry(entry) {
 }
 
 function addEntryToMemory(entry) {
+    if (!entry.tenantId) entry.tenantId = resolvePacketTenant(entry.imei);
     df703Packets.unshift(entry);
     if (df703Packets.length > 200) df703Packets.pop();
 
     telemetryLog.unshift({
         receivedAt: entry.receivedAt,
+        tenantId: entry.tenantId,
         deviceId: entry.imei,
         fill: entry.fillPct ?? null,
         temp: entry.tempC ?? entry.tempThresholdC ?? null,
@@ -947,9 +1288,12 @@ function loadPersistedPackets() {
 
 function recordParsedDf703(rawParsed, sourceChannel, meta = {}) {
     const parsed = enrichReading(rawParsed);
+    const tenantId = meta.tenantId || resolvePacketTenant(parsed.imei);
+    imeiToTenant.set(parsed.imei, tenantId);
     const expectedChars = (parsed.packetSizeBytes || 0) * 2;
     const entry = {
         id: ++packetSeq,
+        tenantId,
         receivedAt: new Date().toISOString(),
         channel: sourceChannel,
         remoteAddress: meta.remoteAddress || null,
@@ -1075,79 +1419,368 @@ function makeSessionCookie(token, maxAgeSec, req) {
     return `tmg_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${isHttps ? '; Secure' : ''}`;
 }
 
-function buildLivePlatformContext() {
-    const devs = [...deviceState.values()];
-    const activeFires = devs.filter(d => (d.telemetry?.temperatureC >= adminPreferences.fireTemp) || d.telemetry?.alarms?.fire);
-    const activeTilts = devs.filter(d => (d.telemetry?.tiltAngleDeg >= adminPreferences.tiltDeg) || d.telemetry?.alarms?.fall);
-    const activeFulls = devs.filter(d => (d.telemetry?.fillPct ?? 0) >= adminPreferences.fullThreshold);
-    const pendingUsers = usersStore.filter(u => u.status === 'pending').length;
+function getMergedTenantBins(tenantId) {
+    const ts = ensureTenantState(tenantId);
+    const tMeta = getTenantById(tenantId);
+    const baseBins = JSON.parse(JSON.stringify(ts.bins || []));
+    const pkts = df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === tenantId);
+    const seen = new Set();
+    const streets = ts.anchors?.streets || [];
+    pkts.forEach(p => {
+        if (!p.imei || seen.has(p.imei)) return;
+        seen.add(p.imei);
+        let b = baseBins.find(x => x.imei === p.imei);
+        if (!b) {
+            const idx = baseBins.length;
+            const anchor = streets[idx % Math.max(1, streets.length)] || tMeta.center;
+            b = {
+                id: idx + 1,
+                code: `B-LIVE-0${idx + 1}`,
+                name: `LIVE DF703 • ${anchor[2] || tMeta.sub}`,
+                street: anchor[2] || tMeta.sub,
+                category: 'Smart Curb Bin 660L (Live Hardware)',
+                lat: (anchor[0] || tMeta.center[0]) + (idx * 0.0008),
+                lng: (anchor[1] || tMeta.center[1]) + (idx * 0.0008),
+                fill: 0, heightCm: 120, temp: 24, angle: 0, battery: 100, voltageV: 3.6, rssi: -65,
+                imei: p.imei, serial: p.imei, model: 'DF703 4G Live Sensor', isLive: true
+            };
+            baseBins.push(b);
+        }
+        const latest = pkts.find(x => x.imei === p.imei && (x.reportType === '01' || x.reportType === '02')) || p;
+        const noEcho = latest.heightValid === false || latest.heightMm >= NO_ECHO_MIN_MM;
+        b.noEcho = (latest.reportType === '01' || latest.reportType === '02') && noEcho;
+        const lastValid = pkts.find(x => x.imei === p.imei && (x.reportType === '01' || x.reportType === '02')
+            && x.heightValid !== false && x.heightMm < NO_ECHO_MIN_MM && typeof x.fillPct === 'number');
+        if (lastValid) {
+            b.fill = lastValid.fillPct;
+            if (typeof lastValid.heightCm === 'number') b.heightCm = lastValid.heightCm;
+        }
+        if (typeof latest.tempC === 'number') b.temp = latest.tempC;
+        if (typeof latest.fallAngleDeg === 'number') b.angle = latest.fallAngleDeg;
+        if (typeof (latest.batteryVoltageAvg ?? latest.voltageV) === 'number') b.voltageV = latest.batteryVoltageAvg ?? latest.voltageV;
+        if (latest.batteryState) {
+            b.batteryState = latest.batteryState;
+            b.battery = { good: 100, low: 20, critical: 5 }[latest.batteryState] ?? b.battery;
+        }
+        const dbm = typeof latest.rsrpDbm === 'number' ? latest.rsrpDbm
+            : typeof latest.rsrp === 'number' ? (Math.abs(latest.rsrp) > 200 ? latest.rsrp / 10 : latest.rsrp) : null;
+        if (dbm !== null && dbm < 0) b.rssi = Math.round(dbm);
+        if (latest.alarms) b.deviceAlarms = latest.alarms;
+    });
+    return { bins: baseBins, packets: pkts };
+}
+
+function buildOverviewReport(tenantId) {
+    const tMeta = getTenantById(tenantId);
+    const ts = ensureTenantState(tenantId);
+    const prefs = ts.preferences;
+    const { bins, packets } = getMergedTenantBins(tenantId);
+    const fullThreshold = prefs.fullThreshold ?? 80;
+    const fireTemp = prefs.fireTemp ?? 55;
+    const tiltDeg = prefs.tiltDeg ?? 35;
+
+    let low = 0, mid = 0, full = 0, noEcho = 0, fireCount = 0, tiltCount = 0, sumFill = 0;
+    const streetMap = new Map();
+    bins.forEach(b => {
+        const f = Number(b.fill || 0);
+        sumFill += f;
+        if (b.noEcho) noEcho++;
+        if ((Number(b.temp) >= fireTemp) || b.deviceAlarms?.fire) fireCount++;
+        if ((Number(b.angle) >= tiltDeg) || b.deviceAlarms?.fall) tiltCount++;
+        if (f >= fullThreshold) full++;
+        else if (f >= 40) mid++;
+        else low++;
+        const st = b.street || tMeta.sub;
+        const cur = streetMap.get(st) || { street: st, totalFill: 0, count: 0, maxFill: 0 };
+        cur.totalFill += f;
+        cur.count++;
+        cur.maxFill = Math.max(cur.maxFill, f);
+        streetMap.set(st, cur);
+    });
+
+    const areaBreakdown = [...streetMap.values()]
+        .map(x => ({ street: x.street, area: x.street, avgFill: Math.round(x.totalFill / Math.max(1, x.count)), count: x.count, maxFill: x.maxFill }))
+        .sort((a, b) => b.avgFill - a.avgFill);
+
+    const recentReadings = packets
+        .filter(p => (p.reportType === '01' || p.reportType === '02') && typeof p.fillPct === 'number')
+        .slice(0, 12)
+        .reverse();
+    const hasLiveTrend = recentReadings.length >= 2;
+    const avgNow = bins.length ? Math.round(sumFill / bins.length) : 0;
+    const hourlyTrend = hasLiveTrend
+        ? {
+            isLive: true,
+            labels: recentReadings.map(p => new Date(p.receivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+            values: recentReadings.map(p => p.fillPct)
+        }
+        : {
+            isLive: tMeta.hardwareMode === 'live',
+            labels: ['06:00', '09:00', '12:00', '15:00', '18:00', 'Now'],
+            values: tMeta.hardwareMode === 'live'
+                ? [avgNow, avgNow, avgNow, avgNow, avgNow, avgNow]
+                : [Math.max(15, avgNow - 24), Math.max(20, avgNow - 14), Math.max(25, avgNow - 4), Math.max(18, avgNow - 18), Math.max(22, avgNow - 7), avgNow]
+        };
+
+    const fleetSummary = Object.values(ts.driverStates || {}).map(ds => ({
+        driverId: ds.driverId,
+        driverName: ds.driverName,
+        truck: ds.truck,
+        activeShift: Boolean(ds.activeShift),
+        mode: ds.mode || 'standby',
+        lat: ds.lat,
+        lng: ds.lng,
+        speedKmh: ds.speedKmh || 0,
+        onRoute: ds.onRoute !== false,
+        distanceFromRouteM: Number(ds.distanceFromRouteM || 0),
+        compliancePct: Number(ds.compliancePct ?? 100),
+        violationActive: Boolean(ds.violationActive),
+        violationReason: ds.violationReason || '',
+        plannedKm: Number(ds.plannedKm || 0),
+        actualKm: Number(ds.actualKm || 0),
+        wastedEgp: Number(ds.wastedEgp || 0),
+        stopsCompletedCount: Array.isArray(ds.stopsCompleted) ? ds.stopsCompleted.length : 0,
+        stopsTotalCount: Array.isArray(ds.assignedRoute?.stops) ? ds.assignedRoute.stops.length : 0,
+        lastPingAt: ds.lastPingAt,
+        hasAssignedRoute: Boolean(ds.assignedRoute?.coords?.length >= 2)
+    }));
+
     return {
-        devs,
+        tenantId,
+        hardwareMode: tMeta.hardwareMode,
+        generatedAt: new Date().toISOString(),
+        summaryKpis: {
+            totalBins: bins.length,
+            liveSensors: bins.filter(b => b.isLive).length,
+            fullBins: full,
+            warmingBins: mid,
+            fireCount,
+            tiltCount,
+            avgFillPct: avgNow,
+            activeTrucks: fleetSummary.length,
+            onRouteDrivers: fleetSummary.filter(f => f.onRoute).length,
+            offRouteDrivers: fleetSummary.filter(f => f.activeShift && !f.onRoute).length
+        },
+        fillDistribution: { low, mid, full, noEcho, total: bins.length },
+        hourlyTrend,
+        areaBreakdown,
+        fleetSummary
+    };
+}
+
+function resolveTenantContext(req, res, reqUrl, user) {
+    const requested = cleanStr(reqUrl.searchParams.get('tenantId') || req.headers['x-tenant-id'] || '', 40);
+    if (user) {
+        if (requested && requested !== user.tenantId && !user.canSwitchTenants) {
+            logAudit({
+                tenantId: user.tenantId,
+                actorId: user.id,
+                actorEmail: user.email,
+                actorRole: user.role,
+                action: 'TENANT_ISOLATION_BLOCKED',
+                target: requested,
+                status: 'DENIED',
+                ip: getClientIp(req),
+                details: `Tenant-locked user (${user.tenantId}) attempted cross-tenant access to ${requested}`
+            });
+            sendJson(res, 403, { error: `Tenant isolation enforced: your account is restricted to "${user.tenantId}".` }, req);
+            return null;
+        }
+        const effective = (user.canSwitchTenants && requested && tenantsStore.some(t => t.id === requested))
+            ? requested
+            : (user.tenantId || 'tmg');
+        return effective;
+    }
+    return (requested && tenantsStore.some(t => t.id === requested)) ? requested : 'tmg';
+}
+
+function updateDriverGpsAndAdherence(tenantId, body, actor, ip) {
+    const ts = ensureTenantState(tenantId);
+    const driverId = cleanStr(body.driverId || actor?.assignedDriverId || ts.activeDriverId || ts.drivers[0]?.id || 'd1', 32);
+    if (!ts.driverStates[driverId]) {
+        const drvMeta = ts.drivers.find(d => d.id === driverId) || { id: driverId, name: cleanStr(body.driverName || driverId, 80), truck: 'Assigned Truck' };
+        ts.driverStates[driverId] = buildDefaultDriverState(getTenantById(tenantId), drvMeta);
+    }
+    const ds = ts.driverStates[driverId];
+    ts.activeDriverId = driverId;
+    if (typeof body.driverName === 'string' && body.driverName.trim()) ds.driverName = cleanStr(body.driverName, 80);
+    if (typeof body.mode === 'string') ds.mode = cleanStr(body.mode, 24);
+    else if (!ds.mode || ds.mode === 'standby') ds.mode = 'live_gps';
+    if (typeof body.screenState === 'string') ds.screenState = cleanStr(body.screenState, 32);
+    if (typeof body.accuracyM === 'number' && Number.isFinite(body.accuracyM)) ds.accuracyM = Math.round(body.accuracyM);
+    if (typeof body.speedKmh === 'number' && Number.isFinite(body.speedKmh)) ds.speedKmh = Math.max(0, Math.round(body.speedKmh));
+    if (typeof body.headingDeg === 'number' && Number.isFinite(body.headingDeg)) ds.headingDeg = Math.round(body.headingDeg);
+    if (typeof body.activeShift === 'boolean') ds.activeShift = body.activeShift;
+    else ds.activeShift = true;
+
+    const prevLat = ds.lat;
+    const prevLng = ds.lng;
+    const hasCoords = typeof body.lat === 'number' && Number.isFinite(body.lat) && typeof body.lng === 'number' && Number.isFinite(body.lng);
+    if (hasCoords) {
+        ds.lat = Number(body.lat.toFixed(6));
+        ds.lng = Number(body.lng.toFixed(6));
+        if (typeof prevLat === 'number' && typeof prevLng === 'number' && ds.totalPings > 0) {
+            const stepKm = haversineKm([prevLat, prevLng], [ds.lat, ds.lng]);
+            if (stepKm > 0.01 && stepKm < 4) {
+                ds.actualKm = Number(((ds.actualKm || 0) + stepKm).toFixed(2));
+            }
+        }
+    }
+    if (typeof body.plannedKm === 'number' && Number.isFinite(body.plannedKm)) ds.plannedKm = Number(body.plannedKm.toFixed(1));
+    if (typeof body.actualKm === 'number' && Number.isFinite(body.actualKm)) ds.actualKm = Number(body.actualKm.toFixed(2));
+
+    const toleranceM = Number(ts.preferences?.corridorToleranceM) || DEFAULT_CORRIDOR_TOLERANCE_M;
+    if ((!Array.isArray(ds.assignedRoute?.coords) || ds.assignedRoute.coords.length < 2) && Array.isArray(body.routeCoords) && body.routeCoords.length >= 2) {
+        ds.assignedRoute = {
+            zone: tenantId,
+            strategy: 'auto_sync',
+            plannedKm: Number(body.plannedKm || ds.plannedKm || 16.5),
+            stops: Array.isArray(ds.assignedRoute?.stops) ? ds.assignedRoute.stops : [],
+            coords: body.routeCoords.filter(c => Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1])).slice(0, 400),
+            assignedAt: new Date().toISOString()
+        };
+    }
+    const routeCoords = Array.isArray(ds.assignedRoute?.coords) ? ds.assignedRoute.coords : [];
+    const wasViolation = Boolean(ds.violationActive);
+
+    if (hasCoords && routeCoords.length >= 2) {
+        const distM = distanceToPolylineM(ds.lat, ds.lng, routeCoords);
+        ds.distanceFromRouteM = distM ?? 0;
+        ds.onRoute = (distM ?? 0) <= toleranceM;
+        ds.violationActive = !ds.onRoute;
+        ds.totalPings = (ds.totalPings || 0) + 1;
+        if (ds.onRoute) ds.onRoutePings = (ds.onRoutePings || 0) + 1;
+        const pingRatio = ds.totalPings ? (ds.onRoutePings / ds.totalPings) * 100 : 100;
+        const extraRatioPenalty = ds.plannedKm > 0 && ds.actualKm > ds.plannedKm ? Math.min(25, ((ds.actualKm - ds.plannedKm) / ds.plannedKm) * 35) : 0;
+        ds.compliancePct = Math.max(0, Math.min(100, Math.round(pingRatio - extraRatioPenalty)));
+        if (ds.violationActive) {
+            ds.violationReason = body.violationReason ? cleanStr(body.violationReason, 160) : `Off planned corridor by ${ds.distanceFromRouteM} m (limit ${toleranceM} m)`;
+            if (!wasViolation) {
+                ds.deviationsCount = (ds.deviationsCount || 0) + 1;
+                ds.events.unshift({ at: new Date().toISOString(), type: 'off_route', text: `${ds.driverName} moved ${ds.distanceFromRouteM}m off planned route` });
+                logAudit({ tenantId, actorId: actor?.id, actorEmail: actor?.email || ds.driverName, actorRole: actor?.role || 'Driver', action: 'DRIVER_OFF_ROUTE', target: ds.driverId, status: 'DENIED', ip, details: ds.violationReason });
+            }
+        } else {
+            ds.violationReason = '';
+            if (wasViolation) {
+                ds.events.unshift({ at: new Date().toISOString(), type: 'back_on_route', text: `${ds.driverName} returned onto planned corridor (${ds.distanceFromRouteM}m)` });
+            }
+        }
+    } else {
+        if (typeof body.compliancePct === 'number') ds.compliancePct = Math.max(0, Math.min(100, Math.round(body.compliancePct)));
+        if (typeof body.violationActive === 'boolean') ds.violationActive = body.violationActive;
+        if (typeof body.distanceFromRouteM === 'number') ds.distanceFromRouteM = Math.max(0, Math.round(body.distanceFromRouteM));
+        ds.onRoute = !ds.violationActive;
+        if (body.violationReason !== undefined) ds.violationReason = cleanStr(body.violationReason, 160);
+    }
+
+    ds.lastPingAt = new Date().toISOString();
+    const extraKm = Math.max(0, +((ds.actualKm || 0) - (ds.plannedKm || 0)).toFixed(1));
+    ds.costPerKmEgp = Number(ts.preferences?.defaultCostPerKm) || 14;
+    ds.wastedEgp = ds.violationActive || extraKm > 0.3 ? Math.round(Math.max(extraKm, ds.distanceFromRouteM / 1000) * ds.costPerKmEgp) : 0;
+
+    if (hasCoords) {
+        const lastPt = ds.actualTrail[ds.actualTrail.length - 1];
+        const movedEnough = !lastPt || haversineKm([lastPt.lat, lastPt.lng], [ds.lat, ds.lng]) >= 0.008;
+        if (movedEnough) {
+            ds.actualTrail.push({
+                lat: ds.lat,
+                lng: ds.lng,
+                at: ds.lastPingAt,
+                onRoute: ds.onRoute,
+                distanceM: ds.distanceFromRouteM,
+                speedKmh: ds.speedKmh
+            });
+            if (ds.actualTrail.length > 250) ds.actualTrail.shift();
+        }
+    }
+    if (ds.events.length > 40) ds.events.length = 40;
+    saveTenantsAndStates();
+    return ds;
+}
+
+function buildLivePlatformContext(tenantId = 'tmg') {
+    const ts = ensureTenantState(tenantId);
+    const prefs = ts.preferences;
+    const { bins, packets } = getMergedTenantBins(tenantId);
+    const activeFires = bins.filter(b => (Number(b.temp) >= prefs.fireTemp) || b.deviceAlarms?.fire);
+    const activeTilts = bins.filter(b => (Number(b.angle) >= prefs.tiltDeg) || b.deviceAlarms?.fall);
+    const activeFulls = bins.filter(b => Number(b.fill || 0) >= prefs.fullThreshold);
+    const pendingUsers = usersStore.filter(u => u.status === 'pending' && (u.tenantId || 'tmg') === tenantId).length;
+    const activeDriver = ts.driverStates[ts.activeDriverId] || Object.values(ts.driverStates)[0];
+    return {
+        tenantId,
+        tenant: getTenantById(tenantId),
+        prefs,
+        bins,
+        packets,
+        activeDriver,
         activeFires,
         activeTilts,
         activeFulls,
         pendingUsers,
-        latestPkt: df703Packets.find(p => p.reportType === '01' || p.reportType === '02') || df703Packets[0] || null,
+        latestPkt: packets.find(p => p.reportType === '01' || p.reportType === '02') || packets[0] || null,
         backups: listLocalBackups()
     };
 }
 
-function buildAiChatReply(question, user) {
+function buildAiChatReply(question, user, tenantId = 'tmg') {
     const qRaw = cleanStr(question, 500);
     const q = qRaw.toLowerCase();
     const isAr = /[\u0600-\u06FF]/.test(qRaw);
-    const ctx = buildLivePlatformContext();
+    const ctx = buildLivePlatformContext(tenantId);
     const d = ctx.latestPkt;
+    const tName = ctx.tenant?.shortName || ctx.tenant?.title || tenantId;
+    const drv = ctx.activeDriver;
 
     const actions = [];
     if (userHasPermission(user, 'backup:read')) {
-        actions.push({ label: isAr ? 'تنزيل تقرير Excel CSV' : 'Download Live CSV Report', type: 'download', url: '/api/export/history.csv' });
+        actions.push({ label: isAr ? 'تنزيل تقرير Excel CSV' : 'Download Live CSV Report', type: 'download', url: `/api/export/history.csv?tenantId=${encodeURIComponent(tenantId)}` });
     }
     if (userHasPermission(user, 'routes:read')) {
-        actions.push({ label: isAr ? 'فتح Route Studio' : 'Open AI Route Studio', type: 'tab', target: 'routes' });
+        actions.push({ label: isAr ? 'فتح مخطط المسارات' : 'Open AI Route Studio', type: 'tab', target: 'routes' });
     }
 
-    // 1. Report / export query
     if (/report|csv|export|تقرير|تقارير|ملف/.test(q)) {
-        const msgAr = `تقرير التشغيل المباشر لمنظومة TMG مدينتي:\n• عدد السلات النشطة فعلياً: ${ctx.devs.length}\n• إجمالي الباكتات المستلمة: ${df703Packets.length}\n• حريق: ${ctx.activeFires.length} | مائلة: ${ctx.activeTilts.length} | ممتلئة (>=${adminPreferences.fullThreshold}%): ${ctx.activeFulls.length}\n• حالة السائق: ${driverGpsState.driverName} — التزام ${driverGpsState.compliancePct}%\n• النسخ الاحتياطية المحلية: ${ctx.backups.length} نسخة (آخر نسخة: ${backupConfig.lastRunAt ? new Date(backupConfig.lastRunAt).toLocaleString() : 'لم تُنفذ بعد'}).\n\nيمكنك تحميل التقرير الفعلي مباشرة من الزر أدناه.`;
-        const msgEn = `TMG Madinaty Live Operations Report:\n• Live Hardware Sensors: ${ctx.devs.length} | Total Packets: ${df703Packets.length}\n• Fire Alerts: ${ctx.activeFires.length} | Tilted: ${ctx.activeTilts.length} | Full (>=${adminPreferences.fullThreshold}%): ${ctx.activeFulls.length}\n• Driver Status: ${driverGpsState.driverName} (${driverGpsState.compliancePct}% route compliance)\n• Local Backups: ${ctx.backups.length} stored.\n\nUse the action button below to download the live report.`;
+        const msgAr = `تقرير التشغيل المباشر (${tName}):\n• إجمالي السلات: ${ctx.bins.length} (${ctx.tenant?.hardwareMode === 'live' ? 'هاردوير فعلي' : 'قطاع تجريبي'})\n• الباكتات المستلمة لهذا المشروع: ${ctx.packets.length}\n• حريق: ${ctx.activeFires.length} | مائلة: ${ctx.activeTilts.length} | ممتلئة (>=${ctx.prefs.fullThreshold}%): ${ctx.activeFulls.length}\n• السائق النشط: ${drv?.driverName || '--'} — التزام ${drv?.compliancePct ?? 100}% (${drv?.onRoute !== false ? 'على المسار المحدد' : `خارج المسار بـ ${drv?.distanceFromRouteM || 0}م`})\n• النسخ الاحتياطية: ${ctx.backups.length} نسخة.\n\nيمكنك تحميل التقرير مباشرة من الزر أدناه.`;
+        const msgEn = `${tName} Live Operations Report:\n• Monitored Bins: ${ctx.bins.length} | Tenant Packets: ${ctx.packets.length}\n• Fire Alerts: ${ctx.activeFires.length} | Tilted: ${ctx.activeTilts.length} | Full (>=${ctx.prefs.fullThreshold}%): ${ctx.activeFulls.length}\n• Driver Status: ${drv?.driverName || '--'} (${drv?.compliancePct ?? 100}% compliance — ${drv?.onRoute !== false ? 'On Planned Route' : `Off-Route by ${drv?.distanceFromRouteM || 0}m`})\n• Local Backups: ${ctx.backups.length} stored.`;
         return { reply: isAr ? msgAr : msgEn, actions };
     }
 
-    // 2. Best Route / Priority / Driver Emergency query
     if (/route|best|priority|driver|fire|tilt|رووت|مسار|سواق|سائق|حريق|ميل|اولوي/.test(q)) {
         const orderNote = ctx.activeFires.length
-            ? (isAr ? `الأولوية القصوى #1 الآن لإنذار الحريق (${ctx.activeFires.map(x => x.imei).join(', ')})` : `URGENT Priority #1: Fire Alert on ${ctx.activeFires.map(x => x.imei).join(', ')}`)
+            ? (isAr ? `الأولوية القصوى #1 الآن لإنذار الحريق (${ctx.activeFires.map(x => x.code).join(', ')})` : `URGENT Priority #1: Fire Alert on ${ctx.activeFires.map(x => x.code).join(', ')}`)
             : ctx.activeTilts.length
-            ? (isAr ? `الأولوية #1 الآن لسلة مائلة (${ctx.activeTilts.map(x => x.imei).join(', ')})` : `Priority #1: Tilted bin ${ctx.activeTilts.map(x => x.imei).join(', ')}`)
-            : (isAr ? `لا توجد طوارئ حريق أو ميلان حالياً — الأولوية للسلات >= ${adminPreferences.fullThreshold}% امتلاء مع أقصر مسار شارع-بشارع.` : `No active fire or tilt emergencies right now — prioritizing bins >= ${adminPreferences.fullThreshold}% fill via shortest street loop.`);
-        const msgAr = `توصية المسار الذكي (TMG مدينتي):\n• ${orderNote}\n• قاعدة التحويل التلقائي للسائق: الحريق (أولوية #1) ← الميلان (أولوية #2) ← إكمال باقي محطات المسار.\n• حدود الإنذار الحالية: حرارة ${adminPreferences.fireTemp}°C، امتلاء ${adminPreferences.fullThreshold}%، ميلان ${adminPreferences.tiltDeg}°.`;
-        const msgEn = `Smart Route Recommendation (TMG Madinaty):\n• ${orderNote}\n• Dynamic Emergency Rule: Fire (#1) → Tilted (#2) → Resume remaining scheduled stops.\n• Active Admin Thresholds: Fire >= ${adminPreferences.fireTemp}°C, Full >= ${adminPreferences.fullThreshold}%, Tilt >= ${adminPreferences.tiltDeg}°.`;
+            ? (isAr ? `الأولوية #1 الآن لسلة مائلة (${ctx.activeTilts.map(x => x.code).join(', ')})` : `Priority #1: Tilted bin ${ctx.activeTilts.map(x => x.code).join(', ')}`)
+            : (isAr ? `لا توجد طوارئ حالياً — الأولوية للسلات >= ${ctx.prefs.fullThreshold}% مع متابعة التزام السائق بالمسار المحدد.` : `No active fire or tilt emergencies — prioritizing bins >= ${ctx.prefs.fullThreshold}% with live route adherence tracking.`);
+        const msgAr = `توصية المسار الذكي (${tName}):\n• ${orderNote}\n• حالة السائق الحالي (${drv?.driverName || '--'}): ${drv?.onRoute !== false ? 'يسير داخل المسار المحدد' : `انحراف ${drv?.distanceFromRouteM || 0} متر عن المسار`} (${drv?.compliancePct ?? 100}%).\n• حدود التنبيه: حرارة ${ctx.prefs.fireTemp}°C، امتلاء ${ctx.prefs.fullThreshold}%، ميلان ${ctx.prefs.tiltDeg}°.`;
+        const msgEn = `Smart Route Recommendation (${tName}):\n• ${orderNote}\n• Active Driver (${drv?.driverName || '--'}): ${drv?.onRoute !== false ? 'On Planned Route' : `Off-Route by ${drv?.distanceFromRouteM || 0}m`} (${drv?.compliancePct ?? 100}%).\n• Thresholds: Fire >= ${ctx.prefs.fireTemp}°C, Full >= ${ctx.prefs.fullThreshold}%, Tilt >= ${ctx.prefs.tiltDeg}°.`;
         return { reply: isAr ? msgAr : msgEn, actions };
     }
 
-    // 3. Security / OWASP / Audit / Users / Backup query
-    if (/security|owasp|audit|user|approve|backup|امان|سكيويرتي|صلاحيات|موافق|باك اب|نسخ/.test(q)) {
+    if (/security|owasp|audit|user|approve|backup|امان|سكيويرتي|صلاحيات|موافق|باك اب|نسخ|عزل/.test(q)) {
         if (userHasPermission(user, 'audit:read')) {
             actions.push({ label: isAr ? 'فتح مركز الأمان والنسخ' : 'Open Security & Audit Center', type: 'tab', target: 'security' });
         }
-        const msgAr = `حالة الأمان (OWASP) والنسخ الاحتياطي:\n• حماية OWASP مفعّلة: تشفير كلمات المرور scrypt، جلسات HMAC-SHA256، حظر Brute-Force، رؤوس CSP/X-Frame-Options، وسجل مراقبة كامل.\n• طلبات المستخدمين المعلقة للموافقة: ${ctx.pendingUsers}\n• سجل المراقبة (Audit Events): ${auditLogs.length} حدث مسجل.\n• جدول النسخ الاحتياطي المحلي: ${backupConfig.schedule} (${ctx.backups.length} نسخة محفوظة محلياً على السيرفر).`;
-        const msgEn = `OWASP Security & Local Backup Status:\n• Active OWASP Controls: scrypt password hashing, HMAC-SHA256 HttpOnly sessions, rate limiting, CSP + X-Frame-Options: DENY, strict RBAC, and Audit Logging.\n• Pending User Approvals: ${ctx.pendingUsers} | Recorded Audit Events: ${auditLogs.length}\n• Local Auto-Backup Schedule: ${backupConfig.schedule} (${ctx.backups.length} local snapshots stored).`;
+        const tenantAudits = auditLogs.filter(a => (a.tenantId || 'tmg') === tenantId).length;
+        const msgAr = `حالة الأمان وعزل المشاريع (${tName}):\n• كل مشروع معزول بالكامل على السيرفر (السلات، السائقين، الباكتات، الإعدادات، وسجل التدقيق).\n• طلبات المستخدمين المعلقة: ${ctx.pendingUsers} | أحداث التدقيق للمشروع: ${tenantAudits}\n• جدول النسخ الاحتياطي المحلي: ${backupConfig.schedule} (${ctx.backups.length} نسخة).`;
+        const msgEn = `OWASP Security & Tenant Isolation (${tName}):\n• Strict per-tenant data isolation active across bins, driver GPS, routes, preferences, users, and audit logs.\n• Pending Approvals: ${ctx.pendingUsers} | Tenant Audit Events: ${tenantAudits}\n• Auto-Backup: ${backupConfig.schedule} (${ctx.backups.length} snapshots).`;
         return { reply: isAr ? msgAr : msgEn, actions };
     }
 
-    // 4. Default / Sensor status query
     const liveSummaryAr = d
-        ? `قراءة السنسور المباشر (IMEI: ${d.imei}): الامتلاء ${d.fillPct ?? 'No echo'}% (${d.heightCm ?? '--'} سم)، الحرارة ${d.tempC ?? '--'}°C، زاوية الميلان ${d.fallAngleDeg ?? '--'}°، البطارية ${d.voltageV ?? '--'}V (${d.batteryState || 'good'})، الإشارة ${d.rsrpDbm ?? '--'} dBm.`
-        : 'لا توجد قراءات 4G مستلمة في الذاكرة منذ آخر تشغيل للسيرفر، ولكن السيرفر جاهز على TCP :5000 (الخارجي :44200).';
+        ? `آخر قراءة (${d.imei}): الامتلاء ${d.fillPct ?? 'No echo'}%، الحرارة ${d.tempC ?? '--'}°C، الميلان ${d.fallAngleDeg ?? '--'}°، البطارية ${d.voltageV ?? '--'}V.`
+        : `عدد السلات بالممشى الحالي (${tName}): ${ctx.bins.length} سلة، وحالة السائق: ${drv?.onRoute !== false ? 'على المسار' : 'خارج المسار'}.`;
     const liveSummaryEn = d
-        ? `Live Sensor (IMEI: ${d.imei}): Fill ${d.fillPct ?? 'No echo'}% (${d.heightCm ?? '--'} cm), Temp ${d.tempC ?? '--'}°C, Tilt ${d.fallAngleDeg ?? '--'}°, Battery ${d.voltageV ?? '--'}V (${d.batteryState || 'good'}), Signal ${d.rsrpDbm ?? '--'} dBm.`
-        : 'No 4G sensor packets received yet since last restart; TCP :5000 listener is active and ready.';
+        ? `Latest Sensor (${d.imei}): Fill ${d.fillPct ?? 'No echo'}%, Temp ${d.tempC ?? '--'}°C, Tilt ${d.fallAngleDeg ?? '--'}°, Battery ${d.voltageV ?? '--'}V.`
+        : `${tName} active bins: ${ctx.bins.length}, driver status: ${drv?.onRoute !== false ? 'On Planned Route' : 'Off-Route'}.`;
 
-    const reply = isAr
-        ? `أهلاً ${user.name} في مساعد Smart Waste Solution — TMG.\n• ${liveSummaryAr}\n• اسألني عن: "أفضل مسار الآن"، "تقرير فوري"، "حالة السنسور والبطارية"، أو "حالة الأمان والباك أب".`
-        : `Hello ${user.name} — TMG AI Operations Assistant.\n• ${liveSummaryEn}\n• Ask me about: "Best route right now", "Live report", "Active fire & tilted alerts", or "OWASP security & backup status".`;
-    return { reply, actions };
+    return {
+        reply: isAr
+            ? `أهلاً ${user.name} (${tName}).\n• ${liveSummaryAr}\n• اسألني عن: "تقرير التشغيل"، "أفضل مسار وحالة السائق"، أو "الأمان وعزل البيانات".`
+            : `Hello ${user.name} (${tName}).\n• ${liveSummaryEn}\n• Ask me about: "Live report", "Best route & driver compliance", or "Security & tenant isolation".`,
+        actions
+    };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1197,18 +1830,18 @@ const server = http.createServer(async (req, res) => {
                 return sendJson(res, 401, { error: 'Invalid email or password' }, req);
             }
             if (user.status === 'pending') {
-                logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_PENDING_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: 'Attempted login before admin approval' });
+                logAudit({ tenantId: user.tenantId, actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_PENDING_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: 'Attempted login before admin approval' });
                 return sendJson(res, 403, { error: 'Your account is pending Administrator approval.', code: 'PENDING_APPROVAL' }, req);
             }
             if (user.status !== 'approved') {
-                logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_REJECTED_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: `Status is ${user.status}` });
+                logAudit({ tenantId: user.tenantId, actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_REJECTED_BLOCKED', target: '/api/auth/login', status: 'DENIED', ip, details: `Status is ${user.status}` });
                 return sendJson(res, 403, { error: 'Your account access has been revoked or rejected.' }, req);
             }
             user.lastLoginAt = new Date().toISOString();
             user.lastLoginIp = ip;
             saveUsersStore();
             const token = signSessionToken(user);
-            logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_SUCCESS', target: 'TMG Madinaty Workspace', status: 'ALLOWED', ip, details: `Signed in with role ${user.role}` });
+            logAudit({ tenantId: user.tenantId, actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'LOGIN_SUCCESS', target: user.tenantId || 'tmg', status: 'ALLOWED', ip, details: `Signed in with role ${user.role}` });
             setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
             res.setHeader('Set-Cookie', makeSessionCookie(token, Math.round(SESSION_TTL_MS / 1000), req));
             res.writeHead(200);
@@ -1222,20 +1855,28 @@ const server = http.createServer(async (req, res) => {
         try {
             const body = await readJsonBody(req);
             const roleReq = cleanStr(body.role || 'Admin', 40);
-            const demoEmailMap = {
-                Admin: 'admin@tmg-madinaty.com',
-                Supervisor: 'ops@tmg-madinaty.com',
-                Driver: 'driver101@tmg-madinaty.com',
-                Auditor: 'audit@tmg-madinaty.com'
-            };
-            const targetEmail = demoEmailMap[roleReq];
+            const reqTenant = cleanStr(body.tenantId || 'tmg', 40);
+            let targetEmail = null;
+            if (reqTenant === 'palm_hills') {
+                targetEmail = roleReq === 'Driver' ? 'driver201@palmhills.demo' : 'admin@palmhills.demo';
+            } else if (reqTenant === 'kafd') {
+                targetEmail = 'admin@kafd.demo';
+            } else {
+                const demoEmailMap = {
+                    Admin: 'admin@tmg-madinaty.com',
+                    Supervisor: 'ops@tmg-madinaty.com',
+                    Driver: 'driver101@tmg-madinaty.com',
+                    Auditor: 'audit@tmg-madinaty.com'
+                };
+                targetEmail = demoEmailMap[roleReq];
+            }
             const user = targetEmail ? usersStore.find(u => u.email === targetEmail && u.status === 'approved') : null;
             if (!user) return sendJson(res, 403, { error: 'Demo profile unavailable or disabled by admin' }, req);
             user.lastLoginAt = new Date().toISOString();
             user.lastLoginIp = ip;
             saveUsersStore();
             const token = signSessionToken(user);
-            logAudit({ actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'DEMO_LOGIN_SUCCESS', target: 'TMG Madinaty Workspace', status: 'ALLOWED', ip, details: `Quick-access login as ${user.role}` });
+            logAudit({ tenantId: user.tenantId, actorId: user.id, actorEmail: user.email, actorRole: user.role, action: 'DEMO_LOGIN_SUCCESS', target: user.tenantId || 'tmg', status: 'ALLOWED', ip, details: `Quick-access login as ${user.role}` });
             setSecurityAndCorsHeaders(res, 'application/json; charset=utf-8', req);
             res.setHeader('Set-Cookie', makeSessionCookie(token, Math.round(SESSION_TTL_MS / 1000), req));
             res.writeHead(200);
@@ -1252,6 +1893,7 @@ const server = http.createServer(async (req, res) => {
             const email = cleanStr(body.email || '', 120).toLowerCase();
             const password = String(body.password || '');
             const requestedRole = ['Supervisor', 'Operator', 'Driver', 'Auditor'].includes(body.role) ? body.role : 'Operator';
+            const tenantId = tenantsStore.some(t => t.id === body.tenantId) ? body.tenantId : 'tmg';
             const note = cleanStr(body.note || '', 160);
 
             if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -1264,12 +1906,16 @@ const server = http.createServer(async (req, res) => {
                 return sendJson(res, 409, { error: 'An account with this email already exists' }, req);
             }
 
+            const ts = ensureTenantState(tenantId);
             const newUser = {
                 id: 'u-' + crypto.randomBytes(6).toString('hex'),
                 name,
                 email,
                 passwordHash: hashPassword(password),
                 role: requestedRole,
+                tenantId,
+                canSwitchTenants: false,
+                assignedDriverId: requestedRole === 'Driver' ? (ts.drivers?.[0]?.id || 'd1') : null,
                 status: 'pending',
                 permissions: [...(ROLE_DEFAULT_PERMISSIONS[requestedRole] || ROLE_DEFAULT_PERMISSIONS.Operator)],
                 requestedNote: note,
@@ -1277,11 +1923,11 @@ const server = http.createServer(async (req, res) => {
             };
             usersStore.push(newUser);
             saveUsersStore();
-            logAudit({ actorId: newUser.id, actorEmail: newUser.email, actorRole: requestedRole, action: 'USER_REGISTERED', target: 'Approval Queue', status: 'INFO', ip, details: `New ${requestedRole} account awaiting admin approval` });
+            logAudit({ tenantId, actorId: newUser.id, actorEmail: newUser.email, actorRole: requestedRole, action: 'USER_REGISTERED', target: 'Approval Queue', status: 'INFO', ip, details: `New ${requestedRole} account awaiting admin approval (${tenantId})` });
             return sendJson(res, 201, {
                 ok: true,
                 status: 'pending',
-                message: 'Registration submitted. Your account is waiting for Administrator approval before accessing TMG Madinaty.'
+                message: `Registration submitted for ${getTenantById(tenantId)?.shortName || tenantId}. Waiting for Administrator approval.`
             }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1300,13 +1946,137 @@ const server = http.createServer(async (req, res) => {
     }
 
     // =========================================================================
+    // MULTI-TENANT BOOTSTRAP, ISOLATION & OVERVIEW REPORTING
+    // =========================================================================
+    if (req.method === 'GET' && pathname === '/api/tenants') {
+        const user = getAuthenticatedUser(req);
+        const list = user && !user.canSwitchTenants
+            ? tenantsStore.filter(t => t.id === user.tenantId)
+            : tenantsStore;
+        return sendJson(res, 200, {
+            tenants: list.map(t => ({
+                id: t.id, title: t.title, shortName: t.shortName, sub: t.sub, city: t.city,
+                hardwareMode: t.hardwareMode, color: t.color, sec: t.sec, center: t.center, zoom: t.zoom
+            })),
+            canSwitchTenants: user ? Boolean(user.canSwitchTenants) : true
+        }, req);
+    }
+
+    if (req.method === 'POST' && pathname === '/api/admin/tenants') {
+        const actor = requirePermission(req, res, 'users:manage');
+        if (!actor) return;
+        if (!actor.canSwitchTenants) {
+            return sendJson(res, 403, { error: 'Only Platform Super Admin can provision new isolated tenants.' }, req);
+        }
+        try {
+            const body = await readJsonBody(req);
+            const shortName = cleanStr(body.shortName || body.name || '', 60);
+            const sub = cleanStr(body.sub || body.sector || 'Smart Compound', 60);
+            const city = cleanStr(body.city || 'Cairo', 40);
+            const rawId = cleanStr(body.id || shortName.toLowerCase().replace(/[^a-z0-9]+/g, '_'), 24).replace(/^_+|_+$/g, '');
+            const id = rawId || `tenant_${Date.now().toString(36)}`;
+            if (!shortName) return sendJson(res, 400, { error: 'Compound / tenant name is required' }, req);
+            if (tenantsStore.some(t => t.id === id)) return sendJson(res, 409, { error: `Tenant "${id}" already exists` }, req);
+
+            const lat = Number.isFinite(Number(body.lat)) ? Number(body.lat) : 30.0444;
+            const lng = Number.isFinite(Number(body.lng)) ? Number(body.lng) : 31.2357;
+            const color = /^#[0-9a-fA-F]{6}$/.test(String(body.color || '')) ? body.color : '#06B6D4';
+            const prefix = id.slice(0, 2).toUpperCase();
+            const newTenant = {
+                id,
+                title: cleanStr(body.title || `${shortName} — Smart Waste`, 80),
+                shortName,
+                sub,
+                city,
+                hardwareMode: body.hardwareMode === 'live' ? 'live' : 'demo',
+                color,
+                sec: '#8B5CF6',
+                center: [lat, lng],
+                zoom: 14,
+                anchors: {
+                    depot: [+(lat + 0.008).toFixed(4), +(lng - 0.011).toFixed(4), `${shortName} Depot`],
+                    landfill: [+(lat - 0.009).toFixed(4), +(lng + 0.013).toFixed(4), `${shortName} Recycling Hub`],
+                    streets: [
+                        [+(lat + 0.003).toFixed(4), +(lng - 0.004).toFixed(4), `${shortName} Main Ave`],
+                        [+(lat - 0.002).toFixed(4), +(lng + 0.005).toFixed(4), `${shortName} Central Loop`],
+                        [+(lat + 0.005).toFixed(4), +(lng + 0.003).toFixed(4), `${shortName} Gate Blvd`],
+                        [+(lat - 0.004).toFixed(4), +(lng - 0.005).toFixed(4), `${shortName} Park Way`]
+                    ]
+                },
+                drivers: [
+                    { id: `${id}-d1`, name: cleanStr(body.driverName || `${shortName} Driver #1`, 50), truck: 'Truck #101', homeDepot: `${shortName} Depot` }
+                ],
+                seedBins: body.hardwareMode === 'live' ? [] : [
+                    { id: Date.now() + 1, code: `${prefix}-01`, name: `${prefix}-01 • Main Ave`, street: `${shortName} Main Ave`, category: 'Smart Curb Bin 660L', lat: +(lat + 0.003).toFixed(4), lng: +(lng - 0.004).toFixed(4), fill: 84, heightCm: 19, temp: 27, angle: 1, battery: 95, voltageV: 3.58, rssi: -68, imei: `86099${String(Date.now()).slice(-10)}1`, serial: `86099${String(Date.now()).slice(-10)}1`, model: 'DF703 Pilot (Demo)', isLive: false },
+                    { id: Date.now() + 2, code: `${prefix}-02`, name: `${prefix}-02 • Central Loop`, street: `${shortName} Central Loop`, category: 'Smart Curb Bin 660L', lat: +(lat - 0.002).toFixed(4), lng: +(lng + 0.005).toFixed(4), fill: 48, heightCm: 62, temp: 25, angle: 0, battery: 90, voltageV: 3.55, rssi: -71, imei: `86099${String(Date.now()).slice(-10)}2`, serial: `86099${String(Date.now()).slice(-10)}2`, model: 'DF703 Pilot (Demo)', isLive: false },
+                    { id: Date.now() + 3, code: `${prefix}-03`, name: `${prefix}-03 • Gate Blvd`, street: `${shortName} Gate Blvd`, category: 'Commercial Bin 1100L', lat: +(lat + 0.005).toFixed(4), lng: +(lng + 0.003).toFixed(4), fill: 91, heightCm: 11, temp: 28, angle: 2, battery: 88, voltageV: 3.54, rssi: -69, imei: `86099${String(Date.now()).slice(-10)}3`, serial: `86099${String(Date.now()).slice(-10)}3`, model: 'DF703 Pilot (Demo)', isLive: false }
+                ]
+            };
+            tenantsStore.push(newTenant);
+            ensureTenantState(id);
+            saveTenantsAndStates();
+            logAudit({ tenantId: id, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'TENANT_CREATED', target: id, status: 'ALLOWED', ip, details: `Created isolated workspace ${shortName}` });
+            return sendJson(res, 201, { ok: true, tenant: newTenant }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    if (req.method === 'GET' && pathname === '/api/tenant/bootstrap') {
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        const tMeta = getTenantById(tenantId);
+        const { bins, packets } = getMergedTenantBins(tenantId);
+        const accessibleTenants = user && !user.canSwitchTenants
+            ? tenantsStore.filter(t => t.id === user.tenantId)
+            : tenantsStore;
+        return sendJson(res, 200, {
+            ok: true,
+            tenantId,
+            tenant: {
+                id: tMeta.id, title: tMeta.title, shortName: tMeta.shortName, sub: tMeta.sub,
+                city: tMeta.city, hardwareMode: tMeta.hardwareMode, color: tMeta.color, sec: tMeta.sec,
+                center: tMeta.center, zoom: tMeta.zoom
+            },
+            tenants: accessibleTenants.map(t => ({
+                id: t.id, title: t.title, shortName: t.shortName, sub: t.sub,
+                hardwareMode: t.hardwareMode, color: t.color, sec: t.sec, center: t.center
+            })),
+            canSwitchTenants: user ? Boolean(user.canSwitchTenants) : true,
+            preferences: ts.preferences,
+            anchors: ts.anchors,
+            drivers: ts.drivers,
+            activeDriverId: ts.activeDriverId,
+            driverStates: ts.driverStates,
+            bins,
+            packets: packets.slice(0, 40),
+            schedules: ts.schedules,
+            pendingDevices: ts.pendingDevices,
+            overviewReport: buildOverviewReport(tenantId)
+        }, req);
+    }
+
+    if (req.method === 'GET' && pathname === '/api/overview/report') {
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        return sendJson(res, 200, buildOverviewReport(tenantId), req);
+    }
+
+    // =========================================================================
     // ADMIN USER APPROVAL, GRANULAR PRIVILEGES (RBAC) & AUDIT LOGS
     // =========================================================================
     if (req.method === 'GET' && pathname === '/api/admin/users') {
         const actor = requirePermission(req, res, 'users:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const scopedUsers = usersStore.filter(u => (u.tenantId || 'tmg') === tenantId);
         return sendJson(res, 200, {
-            users: usersStore.map(sanitizeUserPublic),
+            tenantId,
+            users: scopedUsers.map(sanitizeUserPublic),
             allPermissions: ALL_PERMISSIONS,
             roleDefaults: ROLE_DEFAULT_PERMISSIONS
         }, req);
@@ -1316,10 +2086,15 @@ const server = http.createServer(async (req, res) => {
     if (approveMatch) {
         const actor = requirePermission(req, res, 'users:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
             const target = usersStore.find(u => u.id === approveMatch[1]);
             if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+            if (!actor.canSwitchTenants && (target.tenantId || 'tmg') !== tenantId) {
+                return sendJson(res, 403, { error: 'Cannot approve users belonging to another tenant' }, req);
+            }
             const assignedRole = ROLE_DEFAULT_PERMISSIONS[body.role] ? body.role : target.role;
             target.role = assignedRole;
             target.status = 'approved';
@@ -1331,7 +2106,7 @@ const server = http.createServer(async (req, res) => {
                 target.permissions = [...(ROLE_DEFAULT_PERMISSIONS[assignedRole] || [])];
             }
             saveUsersStore();
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_APPROVED', target: target.email, status: 'ALLOWED', ip, details: `Approved as ${target.role} with ${target.permissions.length} privileges` });
+            logAudit({ tenantId: target.tenantId || tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_APPROVED', target: target.email, status: 'ALLOWED', ip, details: `Approved as ${target.role} with ${target.permissions.length} privileges` });
             return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1342,12 +2117,17 @@ const server = http.createServer(async (req, res) => {
     if (rejectMatch) {
         const actor = requirePermission(req, res, 'users:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         const target = usersStore.find(u => u.id === rejectMatch[1]);
         if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+        if (!actor.canSwitchTenants && (target.tenantId || 'tmg') !== tenantId) {
+            return sendJson(res, 403, { error: 'Cannot modify users belonging to another tenant' }, req);
+        }
         if (target.id === actor.id) return sendJson(res, 400, { error: 'Cannot reject your own active admin session' }, req);
         target.status = 'rejected';
         saveUsersStore();
-        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_REJECTED', target: target.email, status: 'ALLOWED', ip, details: 'Access denied / revoked' });
+        logAudit({ tenantId: target.tenantId || tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'USER_REJECTED', target: target.email, status: 'ALLOWED', ip, details: 'Access denied / revoked' });
         return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
     }
 
@@ -1355,16 +2135,21 @@ const server = http.createServer(async (req, res) => {
     if (permsMatch) {
         const actor = requirePermission(req, res, 'users:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
             const target = usersStore.find(u => u.id === permsMatch[1]);
             if (!target) return sendJson(res, 404, { error: 'User not found' }, req);
+            if (!actor.canSwitchTenants && (target.tenantId || 'tmg') !== tenantId) {
+                return sendJson(res, 403, { error: 'Cannot edit users belonging to another tenant' }, req);
+            }
             if (body.role && ROLE_DEFAULT_PERMISSIONS[body.role]) target.role = body.role;
             if (Array.isArray(body.permissions)) {
                 target.permissions = body.permissions.filter(p => ALL_PERMISSIONS.includes(p) || p === '*');
             }
             saveUsersStore();
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PERMISSIONS_UPDATED', target: target.email, status: 'ALLOWED', ip, details: `Role=${target.role}, Perms=${target.permissions.length}` });
+            logAudit({ tenantId: target.tenantId || tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PERMISSIONS_UPDATED', target: target.email, status: 'ALLOWED', ip, details: `Role=${target.role}, Perms=${target.permissions.length}` });
             return sendJson(res, 200, { ok: true, user: sanitizeUserPublic(target) }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1374,22 +2159,30 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/admin/audit-logs') {
         const actor = requirePermission(req, res, 'audit:read');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         const limit = Math.min(300, Math.max(10, Number(reqUrl.searchParams.get('limit')) || 120));
-        return sendJson(res, 200, { total: auditLogs.length, logs: auditLogs.slice(0, limit) }, req);
+        const scopedLogs = auditLogs.filter(l => (l.tenantId || 'tmg') === tenantId);
+        return sendJson(res, 200, { tenantId, total: scopedLogs.length, logs: scopedLogs.slice(0, limit) }, req);
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/security-status') {
         const actor = requirePermission(req, res, 'dashboard:read');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const pendingCount = usersStore.filter(u => u.status === 'pending' && (u.tenantId || 'tmg') === tenantId).length;
+        const auditCount = auditLogs.filter(l => (l.tenantId || 'tmg') === tenantId).length;
         return sendJson(res, 200, {
-            standard: 'OWASP Top 10 + ASVS Level 2 Controls',
+            tenantId,
+            standard: 'OWASP Top 10 + Multi-Tenant Isolation Controls',
             controls: [
-                { id: 'A01', name: 'Broken Access Control (RBAC + Approval Gate)', active: true, detail: `${usersStore.filter(u => u.status === 'pending').length} pending approvals enforced` },
+                { id: 'A01', name: 'Broken Access Control (RBAC + Tenant Isolation)', active: true, detail: `Strict isolation for "${tenantId}" (${pendingCount} pending approvals)` },
                 { id: 'A02', name: 'Cryptographic Failures (scrypt + HMAC-SHA256)', active: true, detail: 'Salted scrypt passwords, signed HttpOnly sessions, SHA-256 backup digests' },
                 { id: 'A03', name: 'Injection & XSS Defense', active: true, detail: 'CSP headers + zero-SQL JSON store + strict HTML escaping & payload clamping' },
                 { id: 'A05', name: 'Security Misconfiguration Hardening', active: true, detail: 'X-Frame-Options: DENY, nosniff, HSTS, same-origin CORS' },
                 { id: 'A07', name: 'Auth Rate Limiting & Brute-Force Guard', active: true, detail: '25 auth attempts / 15m per IP, 240 API req / min' },
-                { id: 'A09', name: 'Security Logging & Monitoring (Audit Trail)', active: true, detail: `${auditLogs.length} immutable audit events recorded` }
+                { id: 'A09', name: 'Security Logging & Monitoring (Audit Trail)', active: true, detail: `${auditCount} tenant audit events recorded` }
             ]
         }, req);
     }
@@ -1400,12 +2193,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/admin/backups') {
         const actor = requirePermission(req, res, 'backup:read');
         if (!actor) return;
-        return sendJson(res, 200, { config: backupConfig, files: listLocalBackups() }, req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const files = listLocalBackups().filter(f => f.filename.startsWith(`${tenantId}-`) || (tenantId === 'tmg' && f.filename.startsWith('tmg-')));
+        return sendJson(res, 200, { tenantId, config: backupConfig, files }, req);
     }
 
     if (req.method === 'POST' && pathname === '/api/admin/backups/config') {
         const actor = requirePermission(req, res, 'backup:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
             if (['hourly', '6h', 'daily', 'weekly', 'manual'].includes(body.schedule)) {
@@ -1419,7 +2217,7 @@ const server = http.createServer(async (req, res) => {
                 backupConfig.autoDownloadBrowser = Boolean(body.autoDownloadBrowser);
             }
             saveBackupConfig();
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CONFIG_UPDATED', target: backupConfig.schedule, status: 'ALLOWED', ip, details: `Retention=${backupConfig.retentionCount}, AutoDownload=${backupConfig.autoDownloadBrowser}` });
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CONFIG_UPDATED', target: backupConfig.schedule, status: 'ALLOWED', ip, details: `Retention=${backupConfig.retentionCount}, AutoDownload=${backupConfig.autoDownloadBrowser}` });
             return sendJson(res, 200, { ok: true, config: backupConfig }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1429,25 +2227,31 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/admin/backups/run') {
         const actor = requirePermission(req, res, 'backup:manage');
         if (!actor) return;
-        const created = createLocalBackup('manual', actor.email);
-        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CREATED', target: created.filename, status: 'ALLOWED', ip, details: `SHA256=${created.sha256.slice(0, 12)}... (${created.packetsCount} packets)` });
-        return sendJson(res, 201, { ok: true, backup: created, config: backupConfig, files: listLocalBackups() }, req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const created = createLocalBackup('manual', actor.email, tenantId);
+        logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_CREATED', target: created.filename, status: 'ALLOWED', ip, details: `SHA256=${created.sha256.slice(0, 12)}... (${created.packetsCount} packets)` });
+        const files = listLocalBackups().filter(f => f.filename.startsWith(`${tenantId}-`) || (tenantId === 'tmg' && f.filename.startsWith('tmg-')));
+        return sendJson(res, 201, { ok: true, backup: created, config: backupConfig, files }, req);
     }
 
     if (req.method === 'GET' && pathname === '/api/admin/backups/download') {
         const actor = requirePermission(req, res, 'backup:read');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         const fileParam = path.basename(reqUrl.searchParams.get('file') || '');
         const format = (reqUrl.searchParams.get('format') || 'json').toLowerCase();
-        let targetFile = fileParam && fileParam.endsWith('.json') ? fileParam : listLocalBackups()[0]?.filename;
+        const tenantFiles = listLocalBackups().filter(f => f.filename.startsWith(`${tenantId}-`) || (tenantId === 'tmg' && f.filename.startsWith('tmg-')));
+        let targetFile = fileParam && fileParam.endsWith('.json') ? fileParam : tenantFiles[0]?.filename;
         if (!targetFile) {
-            targetFile = createLocalBackup('on-demand', actor.email).filename;
+            targetFile = createLocalBackup('on-demand', actor.email, tenantId).filename;
         }
         const full = path.join(BACKUPS_DIR, targetFile);
         if (!full.startsWith(BACKUPS_DIR + path.sep) || !fs.existsSync(full)) {
             return sendJson(res, 404, { error: 'Backup file not found' }, req);
         }
-        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_DOWNLOADED', target: targetFile, status: 'ALLOWED', ip, details: `Format=${format}` });
+        logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_DOWNLOADED', target: targetFile, status: 'ALLOWED', ip, details: `Format=${format}` });
         if (format === 'csv') {
             const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
             const rows = ['ID,ReceivedAt,ReportType,IMEI,FillPct,HeightCm,TempC,TiltDeg,VoltageV,BatteryState,SignalDbm'];
@@ -1468,6 +2272,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/admin/backups/restore') {
         const actor = requirePermission(req, res, 'backup:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req, 1048576);
             let backupObj = body.backupData;
@@ -1482,18 +2288,16 @@ const server = http.createServer(async (req, res) => {
             if (!backupObj || backupObj.format !== 'TMG-LOCAL-BACKUP-V1') {
                 return sendJson(res, 400, { error: 'Invalid backup format; expected TMG-LOCAL-BACKUP-V1' }, req);
             }
+            const ts = ensureTenantState(tenantId);
             if (Array.isArray(backupObj.df703Packets)) {
-                df703Packets.splice(0, df703Packets.length, ...backupObj.df703Packets.slice(0, 200));
-            }
-            if (Array.isArray(backupObj.telemetryLog)) {
-                telemetryLog.splice(0, telemetryLog.length, ...backupObj.telemetryLog.slice(0, 200));
+                backupObj.df703Packets.forEach(p => { if (!df703Packets.some(x => x.id === p.id)) addEntryToMemory({ ...p, tenantId }); });
             }
             if (backupObj.adminPreferences) {
-                Object.assign(adminPreferences, backupObj.adminPreferences);
-                saveAdminPreferences();
+                Object.assign(ts.preferences, backupObj.adminPreferences);
+                saveTenantsAndStates();
             }
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_RESTORED', target: body.filename || 'uploaded-json', status: 'ALLOWED', ip, details: `Restored ${df703Packets.length} packets & admin preferences` });
-            return sendJson(res, 200, { ok: true, restoredPackets: df703Packets.length, restoredAt: new Date().toISOString() }, req);
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'BACKUP_RESTORED', target: body.filename || 'uploaded-json', status: 'ALLOWED', ip, details: `Restored tenant ${tenantId} preferences & packets` });
+            return sendJson(res, 200, { ok: true, restoredPackets: (backupObj.df703Packets || []).length, restoredAt: new Date().toISOString() }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
         }
@@ -1505,12 +2309,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/chat') {
         const actor = requirePermission(req, res, 'chat:use');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
             const message = cleanStr(body.message || '', 500);
             if (!message) return sendJson(res, 400, { error: 'Message cannot be empty' }, req);
-            const out = buildAiChatReply(message, actor);
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'AI_CHAT_QUERY', target: 'Chatbot', status: 'ALLOWED', ip, details: message.slice(0, 90) });
+            const out = buildAiChatReply(message, actor, tenantId);
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'AI_CHAT_QUERY', target: 'Chatbot', status: 'ALLOWED', ip, details: message.slice(0, 90) });
             return sendJson(res, 200, { ok: true, ...out }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1520,13 +2326,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/driver/reroute-check') {
         const actor = requirePermission(req, res, 'driver:gps');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
         try {
             const body = await readJsonBody(req, 262144);
             const allBins = Array.isArray(body.bins) ? body.bins : [];
             const currentRoute = Array.isArray(body.currentRouteIds) ? body.currentRouteIds.map(String) : [];
             const remainingOriginal = allBins.filter(b => currentRoute.includes(String(b.id)));
-            const fires = allBins.filter(b => (Number(b.temp) >= adminPreferences.fireTemp) || b.deviceAlarms?.fire);
-            const tilts = allBins.filter(b => !fires.includes(b) && ((Number(b.angle) >= adminPreferences.tiltDeg) || b.deviceAlarms?.fall));
+            const fires = allBins.filter(b => (Number(b.temp) >= ts.preferences.fireTemp) || b.deviceAlarms?.fire);
+            const tilts = allBins.filter(b => !fires.includes(b) && ((Number(b.angle) >= ts.preferences.tiltDeg) || b.deviceAlarms?.fall));
 
             const emergencyIds = new Set([...fires, ...tilts].map(b => String(b.id)));
             const resumedStops = remainingOriginal.filter(b => !emergencyIds.has(String(b.id)));
@@ -1534,7 +2343,7 @@ const server = http.createServer(async (req, res) => {
 
             if (fires.length || tilts.length) {
                 logAudit({
-                    actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
+                    tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role,
                     action: 'EMERGENCY_REROUTE', target: 'Driver Route', status: 'ALLOWED', ip,
                     details: `Fire=${fires.length}, Tilted=${tilts.length}, Resuming=${resumedStops.length} remaining stops`
                 });
@@ -1605,12 +2414,16 @@ const server = http.createServer(async (req, res) => {
                 return sendJson(res, 400, { error: 'rawHex field is required' }, req);
             }
             const parsed = parseDf703Packet(body.rawHex);
+            const reqTenant = cleanStr(body.tenantId || reqUrl.searchParams.get('tenantId') || '', 40);
+            const targetTenant = tenantsStore.some(t => t.id === reqTenant) ? reqTenant : resolvePacketTenant(parsed.imei);
             const { entry, pendingDownlink } = recordParsedDf703(parsed, cleanStr(body.channel || 'HTTPS API Gateway', 64), {
-                remoteAddress: cleanStr(body.remoteAddress || req.socket.remoteAddress, 64)
+                remoteAddress: cleanStr(body.remoteAddress || req.socket.remoteAddress, 64),
+                tenantId: targetTenant
             });
-            logDf703(`HTTP ingest type ${parsed.reportType} from IMEI ${parsed.imei}`);
+            logDf703(`HTTP ingest type ${parsed.reportType} from IMEI ${parsed.imei} (tenant=${targetTenant})`);
             return sendJson(res, 201, {
                 accepted: true,
+                tenantId: targetTenant,
                 decoded: entry,
                 queuedDownlinkToSend: pendingDownlink
             }, req);
@@ -1620,68 +2433,103 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && pathname === '/api/df703/packets') {
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        const scopedPackets = df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === tenantId);
         const queuedSummary = [];
         for (const [imei, cmds] of downlinkQueue.entries()) {
-            queuedSummary.push({ imei, commands: cmds });
+            if (resolvePacketTenant(imei) === tenantId) queuedSummary.push({ imei, commands: cmds });
         }
         return sendJson(res, 200, {
             protocol: 'Dingtek DF703 4G V2.8',
+            tenantId,
             tcpBridgeActive: tcpServerActive,
             tcpBridgePort: TCP_PORT,
             tcpStats,
-            connectedDevices: [...liveSockets.keys()],
-            packetsCount: df703Packets.length,
-            packets: df703Packets.slice(0, 40),
+            connectedDevices: [...liveSockets.keys()].filter(imei => resolvePacketTenant(imei) === tenantId),
+            packetsCount: scopedPackets.length,
+            packets: scopedPackets.slice(0, 40),
             queuedDownlinks: queuedSummary,
-            adminPreferences
+            adminPreferences: ts.preferences,
+            driverStates: ts.driverStates,
+            activeDriverId: ts.activeDriverId,
+            overviewReport: buildOverviewReport(tenantId)
         }, req);
     }
 
     // Queue Downlink Command (80029999...81) for a DF703 IMEI (Requires downlink:send privilege or INGEST_TOKEN)
     if (req.method === 'POST' && pathname === '/api/df703/downlink') {
         const hasBearer = INGEST_TOKEN && isAuthorized(req);
-        const actor = hasBearer ? { id: 'token', email: 'api-token', role: 'Admin' } : requirePermission(req, res, 'downlink:send');
+        const actor = hasBearer ? { id: 'token', email: 'api-token', role: 'Admin', canSwitchTenants: true, tenantId: 'tmg' } : requirePermission(req, res, 'downlink:send');
         if (!actor) return;
+        const tenantId = hasBearer ? 'tmg' : resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
             const frame = buildDf703Downlink(body.cmdCode, body.value);
             const imei = cleanStr(body.imei || '864317087587096', 24);
             if (!downlinkQueue.has(imei)) downlinkQueue.set(imei, []);
-            const item = { imei, cmdCode: String(body.cmdCode).toUpperCase(), frame, queuedAt: new Date().toISOString() };
+            const item = { imei, tenantId, cmdCode: String(body.cmdCode).toUpperCase(), frame, queuedAt: new Date().toISOString() };
             downlinkQueue.get(imei).push(item);
             const sentNow = tryDeliverNow(imei);
             logDf703(`Downlink ${sentNow ? 'sent' : 'queued'} for ${imei}: ${frame}`);
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'DOWNLINK_QUEUED', target: imei, status: 'ALLOWED', ip, details: `CMD ${item.cmdCode} -> ${frame}` });
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'DOWNLINK_QUEUED', target: imei, status: 'ALLOWED', ip, details: `CMD ${item.cmdCode} -> ${frame}` });
             return sendJson(res, 201, { queued: !sentNow, sentNow: Boolean(sentNow), command: item }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
-    // Admin Preferences (persisted in DATA_DIR/admin_preferences.json, requires prefs:write on POST)
+    // Admin Preferences (persisted per tenant in DATA_DIR/tenant_states.json, requires prefs:write on POST)
     if (req.method === 'GET' && pathname === '/api/admin/preferences') {
-        return sendJson(res, 200, { ok: true, preferences: adminPreferences }, req);
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        return sendJson(res, 200, { ok: true, tenantId, preferences: ts.preferences, anchors: ts.anchors }, req);
     }
     if (req.method === 'POST' && pathname === '/api/admin/preferences') {
         const actor = requirePermission(req, res, 'prefs:write');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
         try {
             const body = await readJsonBody(req);
             if (!body || typeof body !== 'object') {
                 return sendJson(res, 400, { error: 'Invalid JSON body' }, req);
             }
-            const next = { ...adminPreferences };
+            const next = { ...ts.preferences };
             if (body.fireTemp !== undefined) next.fireTemp = Math.max(0, Math.min(255, Number(body.fireTemp)));
             if (body.fullThreshold !== undefined) next.fullThreshold = Math.max(0, Math.min(100, Number(body.fullThreshold)));
             if (body.tiltDeg !== undefined) next.tiltDeg = Math.max(0, Math.min(90, Number(body.tiltDeg)));
             if (body.lowBattThreshold !== undefined) next.lowBattThreshold = Math.max(0, Math.min(100, Number(body.lowBattThreshold)));
             if (body.defaultCostPerKm !== undefined) next.defaultCostPerKm = Math.max(1, Number(body.defaultCostPerKm));
+            if (body.corridorToleranceM !== undefined) next.corridorToleranceM = Math.max(25, Math.min(1000, Number(body.corridorToleranceM)));
             if (body.routeEndPolicy !== undefined) next.routeEndPolicy = cleanStr(body.routeEndPolicy, 32);
             if (body.autoSchedulerEnabled !== undefined) next.autoSchedulerEnabled = Boolean(body.autoSchedulerEnabled);
-            adminPreferences = next;
-            saveAdminPreferences();
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PREFERENCES_UPDATED', target: 'Alert Thresholds', status: 'ALLOWED', ip, details: `Fire=${next.fireTemp}C Full=${next.fullThreshold}% Tilt=${next.tiltDeg}deg` });
-            return sendJson(res, 200, { ok: true, preferences: adminPreferences }, req);
+            ts.preferences = next;
+            if (body.anchors && typeof body.anchors === 'object') {
+                if (Array.isArray(body.anchors.depot) && body.anchors.depot.length >= 2) ts.anchors.depot = body.anchors.depot;
+                if (Array.isArray(body.anchors.landfill) && body.anchors.landfill.length >= 2) ts.anchors.landfill = body.anchors.landfill;
+            }
+            if (typeof body.brandTitle === 'string' && body.brandTitle.trim()) {
+                const tMeta = getTenantById(tenantId);
+                if (tMeta) tMeta.title = cleanStr(body.brandTitle, 80);
+            }
+            if (typeof body.brandColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(body.brandColor)) {
+                const tMeta = getTenantById(tenantId);
+                if (tMeta) tMeta.color = body.brandColor;
+            }
+            if (tenantId === 'tmg') {
+                adminPreferences = { ...adminPreferences, ...next };
+                saveAdminPreferences();
+            }
+            saveTenantsAndStates();
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'PREFERENCES_UPDATED', target: `Tenant ${tenantId}`, status: 'ALLOWED', ip, details: `Fire=${next.fireTemp}C Full=${next.fullThreshold}% Tilt=${next.tiltDeg}deg Corridor=${next.corridorToleranceM || DEFAULT_CORRIDOR_TOLERANCE_M}m` });
+            return sendJson(res, 200, { ok: true, tenantId, preferences: ts.preferences, anchors: ts.anchors }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
         }
@@ -1726,107 +2574,174 @@ const server = http.createServer(async (req, res) => {
         });
     }
 
-    // Live Driver Mobile GPS Compliance & Violation Tracking + Assigned Route Sync
+    // Live Driver Mobile GPS Compliance & Route Adherence Tracking + Assigned Route Sync
     if (req.method === 'GET' && pathname === '/api/driver/gps') {
-        return sendJson(res, 200, driverGpsState);
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        const reqDrv = cleanStr(reqUrl.searchParams.get('driverId') || ts.activeDriverId || ts.drivers?.[0]?.id || 'd1', 32);
+        const activeState = ts.driverStates[reqDrv] || Object.values(ts.driverStates)[0] || null;
+        return sendJson(res, 200, {
+            tenantId,
+            activeDriverId: ts.activeDriverId,
+            toleranceM: ts.preferences?.corridorToleranceM || DEFAULT_CORRIDOR_TOLERANCE_M,
+            driver: activeState,
+            drivers: Object.values(ts.driverStates || {})
+        }, req);
     }
     if (req.method === 'POST' && pathname === '/api/driver/gps') {
         const actor = requirePermission(req, res, 'driver:gps');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
         try {
             const body = await readJsonBody(req);
-            if (typeof body.driverId === 'string') driverGpsState.driverId = cleanStr(body.driverId, 32);
-            if (typeof body.driverName === 'string') driverGpsState.driverName = cleanStr(body.driverName, 80);
-            if (typeof body.lat === 'number') driverGpsState.lat = body.lat;
-            if (typeof body.lng === 'number') driverGpsState.lng = body.lng;
-            if (typeof body.speedKmh === 'number') driverGpsState.speedKmh = body.speedKmh;
-            if (typeof body.screenState === 'string') driverGpsState.screenState = cleanStr(body.screenState, 32);
-            if (typeof body.plannedKm === 'number') driverGpsState.plannedKm = body.plannedKm;
-            if (typeof body.actualKm === 'number') driverGpsState.actualKm = body.actualKm;
-            if (typeof body.compliancePct === 'number') driverGpsState.compliancePct = body.compliancePct;
-            if (typeof body.violationActive === 'boolean') driverGpsState.violationActive = body.violationActive;
-            if (body.violationReason !== undefined) driverGpsState.violationReason = cleanStr(body.violationReason, 160);
-            driverGpsState.lastPingAt = new Date().toISOString();
-            const extraKm = Math.max(0, +(driverGpsState.actualKm - driverGpsState.plannedKm).toFixed(1));
-            driverGpsState.wastedEgp = Math.round(extraKm * driverGpsState.costPerKmEgp);
-            driverGpsState.history.unshift({
-                at: driverGpsState.lastPingAt,
-                driverId: driverGpsState.driverId,
-                lat: body.lat ?? null,
-                lng: body.lng ?? null,
-                speedKmh: body.speedKmh ?? 0,
-                screenState: body.screenState || 'active',
-                compliancePct: driverGpsState.compliancePct,
-                violationActive: driverGpsState.violationActive
-            });
-            if (driverGpsState.history.length > 80) driverGpsState.history.pop();
-            return sendJson(res, 200, { updated: true, state: driverGpsState }, req);
+            const state = updateDriverGpsAndAdherence(tenantId, body, actor, ip);
+            return sendJson(res, 200, { updated: true, tenantId, state }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
     if (req.method === 'GET' && pathname === '/api/driver/route') {
-        return sendJson(res, 200, { assignedRoute: driverGpsState.assignedRoute || null }, req);
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        const drvId = cleanStr(reqUrl.searchParams.get('driverId') || user?.assignedDriverId || ts.activeDriverId || ts.drivers?.[0]?.id || 'd1', 32);
+        const ds = ts.driverStates[drvId] || Object.values(ts.driverStates)[0];
+        return sendJson(res, 200, {
+            tenantId,
+            driverId: drvId,
+            assignedRoute: ds?.assignedRoute || null,
+            driverState: ds || null
+        }, req);
     }
     if (req.method === 'POST' && pathname === '/api/driver/route') {
         const actor = requirePermission(req, res, 'routes:write');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
         try {
             const body = await readJsonBody(req, 262144);
-            driverGpsState.assignedRoute = body;
-            driverGpsState.plannedKm = Number(body.plannedKm) || driverGpsState.plannedKm;
-            driverGpsState.actualKm = driverGpsState.plannedKm;
-            driverGpsState.compliancePct = 100;
-            driverGpsState.violationActive = false;
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'ROUTE_ASSIGNED', target: cleanStr(body.driverId || 'Driver', 32), status: 'ALLOWED', ip, details: `${Array.isArray(body.stops) ? body.stops.length : 0} stops assigned` });
-            return sendJson(res, 200, { assigned: true, route: driverGpsState.assignedRoute }, req);
+            const drvId = cleanStr(body.driverId || ts.activeDriverId || ts.drivers?.[0]?.id || 'd1', 32);
+            if (!ts.driverStates[drvId]) {
+                const drvMeta = ts.drivers.find(d => d.id === drvId) || { id: drvId, name: drvId, truck: 'Assigned Truck' };
+                ts.driverStates[drvId] = buildDefaultDriverState(getTenantById(tenantId), drvMeta);
+            }
+            const ds = ts.driverStates[drvId];
+            ts.activeDriverId = drvId;
+            ds.assignedRoute = { ...body, assignedAt: new Date().toISOString(), assignedBy: actor.email };
+            ds.plannedKm = Number(body.plannedKm) || ds.plannedKm || 16.5;
+            ds.actualKm = 0;
+            ds.compliancePct = 100;
+            ds.onRoute = true;
+            ds.distanceFromRouteM = 0;
+            ds.violationActive = false;
+            ds.violationReason = '';
+            ds.actualTrail = [];
+            ds.stopsCompleted = [];
+            ds.stopsSkipped = [];
+            ds.deviationsCount = 0;
+            ds.onRoutePings = 0;
+            ds.totalPings = 0;
+            ds.events.unshift({ at: new Date().toISOString(), type: 'route_assigned', text: `Route assigned (${Array.isArray(body.stops) ? body.stops.length : 0} stops, ${ds.plannedKm} km)` });
+            saveTenantsAndStates();
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'ROUTE_ASSIGNED', target: drvId, status: 'ALLOWED', ip, details: `${Array.isArray(body.stops) ? body.stops.length : 0} stops assigned (${ds.plannedKm} km)` });
+            return sendJson(res, 200, { assigned: true, tenantId, driverId: drvId, route: ds.assignedRoute, driverState: ds }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
         }
     }
 
-    // Full Platform Data Migration Export & Import (Move cleanly to any server/platform)
+    if (req.method === 'POST' && pathname === '/api/driver/stop-action') {
+        const actor = requirePermission(req, res, 'driver:gps');
+        if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        try {
+            const body = await readJsonBody(req);
+            const drvId = cleanStr(body.driverId || actor.assignedDriverId || ts.activeDriverId || ts.drivers?.[0]?.id || 'd1', 32);
+            const ds = ts.driverStates[drvId] || Object.values(ts.driverStates)[0];
+            if (!ds) return sendJson(res, 404, { error: 'Driver not found' }, req);
+            const action = cleanStr(body.action || 'collect', 24);
+            const stopId = body.stopId !== undefined ? String(body.stopId) : null;
+            const reason = cleanStr(body.reason || '', 160);
+            if (action === 'collect' && stopId) {
+                if (!ds.stopsCompleted.includes(stopId)) ds.stopsCompleted.push(stopId);
+                ds.tankLoadPct = Math.min(100, (ds.tankLoadPct || 0) + 16);
+                const bin = ts.bins.find(b => String(b.id) === stopId);
+                if (bin) { bin.fill = 4; bin.angle = 0; }
+                ds.events.unshift({ at: new Date().toISOString(), type: 'collected', text: `${ds.driverName} emptied stop #${stopId}` });
+            } else if (action === 'skip' && stopId) {
+                if (!ds.stopsSkipped.some(s => String(s.stopId) === stopId)) {
+                    ds.stopsSkipped.push({ stopId, reason: reason || 'Access blocked', at: new Date().toISOString() });
+                }
+                ds.events.unshift({ at: new Date().toISOString(), type: 'skipped', text: `${ds.driverName} skipped stop #${stopId}: ${reason || 'Blocked'}` });
+            } else if (action === 'unload') {
+                ds.tankLoadPct = 0;
+                ds.events.unshift({ at: new Date().toISOString(), type: 'unload', text: `${ds.driverName} unloaded truck tank at recycling hub` });
+            }
+            if (ds.events.length > 40) ds.events.length = 40;
+            saveTenantsAndStates();
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: `DRIVER_${action.toUpperCase()}`, target: `${drvId}:${stopId || 'tank'}`, status: 'ALLOWED', ip, details: reason || action });
+            return sendJson(res, 200, { ok: true, tenantId, driverState: ds }, req);
+        } catch (err) {
+            return sendJson(res, 400, { error: err.message }, req);
+        }
+    }
+
+    // Full Platform Data Migration Export & Import (Tenant Scoped)
     if (req.method === 'GET' && pathname === '/api/migration/export') {
         const actor = requirePermission(req, res, 'backup:read');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
         const bundle = {
             format: 'TMG-FULL-MIGRATION-V2',
+            tenantId,
             exportedAt: new Date().toISOString(),
-            platformVersion: '3.0.0-OWASP',
-            telemetryLog,
-            df703Packets,
-            driverGpsState,
-            adminPreferences
+            platformVersion: '3.1.0-MULTITENANT',
+            telemetryLog: telemetryLog.filter(t => (t.tenantId || 'tmg') === tenantId),
+            df703Packets: df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === tenantId),
+            driverStates: ts.driverStates,
+            adminPreferences: ts.preferences,
+            anchors: ts.anchors,
+            bins: ts.bins
         };
         bundle.sha256 = crypto.createHash('sha256').update(JSON.stringify(bundle)).digest('hex');
-        logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_EXPORT', target: 'Full Platform Bundle', status: 'ALLOWED', ip, details: `SHA256=${bundle.sha256.slice(0, 12)}...` });
+        logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_EXPORT', target: tenantId, status: 'ALLOWED', ip, details: `SHA256=${bundle.sha256.slice(0, 12)}...` });
         return sendJson(res, 200, bundle, req);
     }
 
     if (req.method === 'POST' && pathname === '/api/migration/import') {
         const actor = requirePermission(req, res, 'migration:manage');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
         try {
             const body = await readJsonBody(req, 1048576);
             if (!body || (!String(body.format || '').startsWith('PAROT-') && !String(body.format || '').startsWith('TMG-'))) {
                 return sendJson(res, 400, { error: 'Invalid migration bundle format' }, req);
             }
             if (Array.isArray(body.df703Packets)) {
-                df703Packets.splice(0, df703Packets.length, ...body.df703Packets.slice(0, 200));
+                body.df703Packets.slice(0, 200).forEach(p => { if (!df703Packets.some(x => x.id === p.id)) addEntryToMemory({ ...p, tenantId }); });
             }
-            if (Array.isArray(body.telemetryLog)) {
-                telemetryLog.splice(0, telemetryLog.length, ...body.telemetryLog.slice(0, 200));
-            }
-            if (body.driverGpsState && typeof body.driverGpsState === 'object') {
-                Object.assign(driverGpsState, body.driverGpsState);
-            }
-            logAudit({ actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_IMPORT', target: 'Full Platform Bundle', status: 'ALLOWED', ip, details: `Imported ${df703Packets.length} packets` });
+            if (body.adminPreferences) Object.assign(ts.preferences, body.adminPreferences);
+            if (body.driverStates && typeof body.driverStates === 'object') Object.assign(ts.driverStates, body.driverStates);
+            saveTenantsAndStates();
+            logAudit({ tenantId, actorId: actor.id, actorEmail: actor.email, actorRole: actor.role, action: 'MIGRATION_IMPORT', target: tenantId, status: 'ALLOWED', ip, details: `Imported tenant ${tenantId} bundle` });
             return sendJson(res, 200, {
                 migrated: true,
+                tenantId,
                 importedAt: new Date().toISOString(),
-                packetsCount: df703Packets.length,
-                telemetryCount: telemetryLog.length
+                packetsCount: df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === tenantId).length,
+                telemetryCount: telemetryLog.filter(t => (t.tenantId || 'tmg') === tenantId).length
             }, req);
         } catch (err) {
             return sendJson(res, 400, { error: err.message }, req);
@@ -1835,9 +2750,11 @@ const server = http.createServer(async (req, res) => {
 
     // 3-Month Excel-Compatible CSV History Export
     if (req.method === 'GET' && pathname === '/api/export/history.csv') {
+        const user = getAuthenticatedUser(req);
+        const tenantId = resolveTenantContext(req, res, reqUrl, user) || 'tmg';
         const csv = buildQuarterlyHistoryCsv();
         setSecurityAndCorsHeaders(res, 'text/csv; charset=utf-8', req);
-        res.setHeader('Content-Disposition', 'attachment; filename="TMG_SmartWaste_Madinaty_History.csv"');
+        res.setHeader('Content-Disposition', `attachment; filename="${tenantId}_SmartWaste_History.csv"`);
         res.writeHead(200);
         return res.end(csv);
     }
@@ -1846,16 +2763,22 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/backup/snapshot') {
         const actor = requirePermission(req, res, 'backup:read');
         if (!actor) return;
+        const tenantId = resolveTenantContext(req, res, reqUrl, actor);
+        if (!tenantId) return;
+        const ts = ensureTenantState(tenantId);
+        const tenantPkts = df703Packets.filter(p => (p.tenantId || resolvePacketTenant(p.imei)) === tenantId).slice(0, 100);
+        const tenantTlm = telemetryLog.filter(t => (t.tenantId || 'tmg') === tenantId).slice(0, 100);
         const snapshotData = {
             format: 'TMG-DR-SNAPSHOT-V2',
+            tenantId,
             createdAt: new Date().toISOString(),
             rtoTargetMinutes: 45,
             rpoTargetMinutes: 5,
-            telemetryCount: telemetryLog.length,
-            df703PacketsCount: df703Packets.length,
-            telemetryLog: telemetryLog.slice(0, 100),
-            df703Packets: df703Packets.slice(0, 100),
-            driverGpsState
+            telemetryCount: tenantTlm.length,
+            df703PacketsCount: tenantPkts.length,
+            telemetryLog: tenantTlm,
+            df703Packets: tenantPkts,
+            driverStates: ts.driverStates
         };
         const digest = crypto.createHash('sha256').update(JSON.stringify(snapshotData)).digest('hex');
         return sendJson(res, 200, { ...snapshotData, sha256: digest }, req);
@@ -1909,8 +2832,9 @@ const server = http.createServer(async (req, res) => {
             return res.end('Not Found');
         }
         const ext = path.extname(resolvedPath).toLowerCase();
-        setSecurityAndCorsHeaders(res, MIME_TYPES[ext] || 'application/octet-stream');
-        res.setHeader('Cache-Control', ext === '.html' ? 'no-cache' : 'public, max-age=3600');
+        setSecurityAndCorsHeaders(res, MIME_TYPES[ext] || 'application/octet-stream', req);
+        const noCache = ext === '.html' || baseName === 'sw.js';
+        res.setHeader('Cache-Control', noCache ? 'no-cache, no-store, must-revalidate' : 'public, max-age=3600');
         res.writeHead(200);
         fs.createReadStream(resolvedPath).pipe(res);
     });
@@ -1982,10 +2906,14 @@ tcpServer.listen(TCP_PORT, HOST, () => {
     logDf703(`DF703 TCP listener on ${HOST}:${TCP_PORT} (set the sensor Server1 to YOUR_PUBLIC_IP;${TCP_PORT};)`);
 });
 
+loadTenantsAndStates();
 loadUsersStore();
 loadAuditLogs();
 loadBackupConfig();
 loadAdminPreferences();
+if (tenantStates.has('tmg')) {
+    Object.assign(tenantStates.get('tmg').preferences, adminPreferences);
+}
 loadDeviceSettings();
 loadPersistedPackets();
 
